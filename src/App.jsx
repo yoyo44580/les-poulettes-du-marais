@@ -200,6 +200,27 @@ if (eggsNeeded > stockEggs) {
   }
 
   async function changeStatus(id, status) {
+    if (status === "Prête") {
+
+  const order = orders.find((o) => o.id === id);
+
+  if (order?.email) {
+
+    await fetch(
+      "https://iomagmnnazaidtmivayo.functions.supabase.co/send-order-ready-email",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientEmail: order.email,
+          clientName: order.client,
+        }),
+      }
+    );
+  }
+}
     const { error } = await supabase
       .from("orders")
       .update({ status })
@@ -231,7 +252,7 @@ if (eggsNeeded > stockEggs) {
     if (userIds.length > 0) {
       const { data, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, full_name, email")
         .in("id", userIds);
 
       if (profilesError) {
@@ -248,6 +269,7 @@ if (eggsNeeded > stockEggs) {
       return {
         id: o.id,
         client: profile?.full_name || "Client",
+        email: profile?.email || "",
         box6: o.box6,
         box12: o.box12,
         status: o.status,
