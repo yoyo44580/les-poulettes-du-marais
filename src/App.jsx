@@ -206,33 +206,28 @@ if (eggsNeeded > stockEggs) {
 
   if (order?.email) {
 
-    await fetch(
-      "https://iomagmnnazaidtmivayo.functions.supabase.co/send-order-ready-email",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          clientEmail: order.email,
-          clientName: order.client,
-        }),
-      }
-    );
+    const response = await fetch(
+  "https://iomagmnnazaidtmivayo.functions.supabase.co/send-order-ready-email",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      clientEmail: order.email,
+      clientName: order.client,
+    }),
   }
+);
+
+const result = await response.json();
+
+console.log("Réponse email :", result);
+
+if (!response.ok) {
+  alert("Erreur email : " + JSON.stringify(result));
 }
-    const { error } = await supabase
-      .from("orders")
-      .update({ status })
-      .eq("id", id);
-
-    if (error) {
-      alert("Erreur mise à jour statut : " + error.message);
-      return;
-    }
-
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
-  }
 
   async function loadOrders() {
     const { data: ordersData, error: ordersError } = await supabase
