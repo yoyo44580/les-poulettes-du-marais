@@ -1,32 +1,58 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// Setup type definitions for built-in Supabase Runtime APIs
-import "@supabase/functions-js/edge-runtime.d.ts"
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-console.log("Hello from Functions!")
-
-Deno.serve(async (req) => {
-  const { name } = await req.json()
-  const data = {
-    message: `Hello ${name}!`,
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      headers: corsHeaders,
+    });
   }
 
-  return new Response(
-    JSON.stringify(data),
-    { headers: { "Content-Type": "application/json" } },
-  )
-})
+  try {
+    const body = await req.json();
+    const { clientEmail, clientName } = body;
 
-/* To invoke locally:
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: "Les Poulettes du Marais <onboarding@resend.dev>",
+        to: clientEmail,
+        subject: "Votre commande est prête 🥚",
+        html: `
+          <h1>Bonjour ${clientName}</h1>
+          <p>Votre commande d'œufs est maintenant prête 🥚</p>
+          <p>Merci pour votre confiance !</p>
+        `,
+      }),
+    });
 
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/send-order-ready-email' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
+    const data = await response.json();
 
-*/
+    return new Response(JSON.stringify(data), {
+      status: response.status,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
+  }
+});

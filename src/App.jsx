@@ -200,35 +200,48 @@ if (eggsNeeded > stockEggs) {
   }
 
   async function changeStatus(id, status) {
-    if (status === "Prête") {
+  if (status === "Prête") {
+    const order = orders.find((o) => o.id === id);
 
-  const order = orders.find((o) => o.id === id);
+    if (order?.email) {
+      const response = await fetch(
+        "https://iomagmnnazaidtmivayo.functions.supabase.co/send-order-ready-email",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+        
+          },
+          body: JSON.stringify({
+            clientEmail: order.email,
+            clientName: order.client,
+          }),
+        }
+      );
 
-  if (order?.email) {
+      const result = await response.json();
+      console.log("Réponse email :", result);
 
-    const response = await fetch(
-  "https://iomagmnnazaidtmivayo.functions.supabase.co/send-order-ready-email",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-    },
-    body: JSON.stringify({
-      clientEmail: order.email,
-      clientName: order.client,
-    }),
+      if (!response.ok) {
+        alert("Erreur email : " + JSON.stringify(result));
+      }
+    }
   }
-);
 
-const result = await response.json();
+  const { error } = await supabase
+    .from("orders")
+    .update({ status })
+    .eq("id", id);
 
-console.log("Réponse email :", result);
+  if (error) {
+    alert("Erreur mise à jour statut : " + error.message);
+    return;
+  }
 
-if (!response.ok) {
-  alert("Erreur email : " + JSON.stringify(result));
+  setOrders((prev) =>
+    prev.map((o) => (o.id === id ? { ...o, status } : o))
+  );
 }
-
   async function loadOrders() {
     const { data: ordersData, error: ordersError } = await supabase
       .from("orders")
