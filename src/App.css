@@ -3611,6 +3611,69 @@ button {
   padding-top: 4px;
 }
 
+.client-account-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.client-account-actions button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 20px;
+  gap: 10px;
+  min-height: 112px;
+  align-items: center;
+  border: 1px solid rgba(67, 63, 45, 0.12);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(255, 253, 247, 0.98), rgba(255, 246, 225, 0.92));
+  color: #173a26;
+  cursor: pointer;
+  padding: 14px;
+  text-align: left;
+  box-shadow: 0 14px 32px rgba(34, 31, 18, 0.07);
+}
+
+.client-account-actions button > span {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #173a26;
+  color: #fffdf8;
+}
+
+.client-account-actions strong,
+.client-account-actions em {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.client-account-actions strong {
+  color: #173a26;
+  font-size: 17px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.client-account-actions em {
+  margin-top: -10px;
+  color: #5f574b;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.client-account-actions button > svg {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: #8a6a28;
+}
+
 .orders-list {
   display: grid;
   gap: 16px;
@@ -3756,6 +3819,32 @@ button {
 .client-account-dogs em {
   color: #8a4318;
   font-weight: 950;
+}
+
+.client-order-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.client-order-progress span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #efe4cb;
+  color: #73664e;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 950;
+  text-align: center;
+}
+
+.client-order-progress span.is-active {
+  background: #173a26;
+  color: #fffdf8;
 }
 
 .client-account-dogs {
@@ -8522,6 +8611,7 @@ button {
   }
 
   .client-account-summary,
+  .client-account-actions,
   .client-account-grid,
   .client-account-info {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8605,6 +8695,7 @@ button {
   .client-detail-stats,
   .client-history-grid,
   .client-account-summary,
+  .client-account-actions,
   .client-account-grid,
   .client-account-info,
   .faq-grid {

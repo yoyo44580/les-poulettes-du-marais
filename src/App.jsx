@@ -736,6 +736,24 @@ function normalizeOrderStatus(status) {
   return legacyStatuses[status] || status;
 }
 
+function getOrderStatusStep(status) {
+  const normalizedStatus = normalizeOrderStatus(status || "À préparer");
+
+  if (normalizedStatus === "Livrée") {
+    return 3;
+  }
+
+  if (normalizedStatus === "Prête") {
+    return 2;
+  }
+
+  if (normalizedStatus === "Annulée") {
+    return 0;
+  }
+
+  return 1;
+}
+
 export default function EggSalesPWA() {
   const toastIdRef = useRef(0);
   const confirmDialogResolveRef = useRef(null);
@@ -5224,6 +5242,11 @@ const clientAccountDogs = Object.values(
     return dogs;
   }, {})
 );
+const latestClientOrder = myOrders[0] || null;
+const latestClientOrderStatus = latestClientOrder
+  ? normalizeOrderStatus(latestClientOrder.status || "À préparer")
+  : "";
+const clientNotificationLabel = clientPushStatus === "enabled" ? "Notifications actives" : "Notifications à activer";
 const kennelCalendarDays = (() => {
   const days = [];
 
@@ -7083,8 +7106,8 @@ function openHomeFeaturedEventPage() {
               {isLogged && !isAdmin && (
                 <>
                   <button onClick={goToMyOrders} className="app-nav__button">
-                    <History size={17} />
-                    Mes commandes
+                    <UserRound size={17} />
+                    Mon compte
                   </button>
                   <button onClick={goToProfile} className="app-nav__button">
                     <UserRound size={17} />
@@ -9079,6 +9102,41 @@ function openHomeFeaturedEventPage() {
               </div>
             </div>
 
+            <div className="client-account-actions" aria-label="Accès rapides du compte client">
+              <button type="button" onClick={() => setScreen("shop")}>
+                <span>
+                  <ShoppingBasket size={24} />
+                </span>
+                <strong>Commander</strong>
+                <em>{latestClientOrderStatus ? `Dernière commande : ${latestClientOrderStatus}` : "Passer une commande d'oeufs"}</em>
+                <ChevronRight size={20} />
+              </button>
+              <button type="button" onClick={() => setScreen("education")}>
+                <span>
+                  <School size={24} />
+                </span>
+                <strong>Ferme pédagogique</strong>
+                <em>{clientAccountEducationBookings.length} réservation{clientAccountEducationBookings.length > 1 ? "s" : ""}</em>
+                <ChevronRight size={20} />
+              </button>
+              <button type="button" onClick={() => setScreen("kennel")}>
+                <span>
+                  <PawPrint size={24} />
+                </span>
+                <strong>Pension canine</strong>
+                <em>{clientAccountKennelBookings.length} séjour{clientAccountKennelBookings.length > 1 ? "s" : ""}</em>
+                <ChevronRight size={20} />
+              </button>
+              <button type="button" onClick={goToProfile}>
+                <span>
+                  <UserRound size={24} />
+                </span>
+                <strong>Mes infos</strong>
+                <em>{clientNotificationLabel}</em>
+                <ChevronRight size={20} />
+              </button>
+            </div>
+
             <div className="client-account-summary">
               <article>
                 <span>Commandes</span>
@@ -9137,6 +9195,13 @@ function openHomeFeaturedEventPage() {
                       <strong>Commande du {formatDeliveryDate(o.delivery_date)}</strong>
                       <span>{getOrderSummary(o)}</span>
                       <em>{getOrderEggs(o)} œufs - {o.status}</em>
+                      <div className="client-order-progress" data-step={getOrderStatusStep(o.status)}>
+                        {["Envoyée", "Préparation", "Prête", "Livrée"].map((step, index) => (
+                          <span key={step} className={getOrderStatusStep(o.status) >= index ? "is-active" : ""}>
+                            {step}
+                          </span>
+                        ))}
+                      </div>
                     </article>
                   ))}
                   {myOrders.length === 0 && <p>Aucune commande pour le moment.</p>}
