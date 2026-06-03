@@ -231,8 +231,9 @@ button {
 
 .egg-summary-order {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(190px, 0.65fr) minmax(160px, 0.45fr);
   gap: 18px;
+  align-items: center;
   padding: 15px 18px;
   border-top: 1px solid rgba(67, 63, 45, 0.12);
 }
@@ -252,6 +253,30 @@ button {
   color: #4f5d44;
   font-style: normal;
   line-height: 1.35;
+}
+
+.egg-summary-status {
+  display: grid;
+  gap: 7px;
+}
+
+.egg-summary-status span {
+  color: #657058;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.egg-summary-status select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(67, 63, 45, 0.18);
+  border-radius: 8px;
+  background: #fffdf7;
+  color: #173a26;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 850;
 }
 
 @media (max-width: 760px) {
@@ -6708,6 +6733,105 @@ button {
   white-space: nowrap;
 }
 
+.admin-deploy-center {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(23, 58, 38, 0.14);
+  border-radius: 8px;
+  background: #f2fbf7;
+  padding: 15px;
+}
+
+.admin-deploy-center__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-deploy-center__header div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-deploy-center__header span,
+.admin-deploy-center__grid span {
+  color: #40745b;
+  font-size: 0.8rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-deploy-center__header strong {
+  color: #173a26;
+  font-size: 1.15rem;
+  font-weight: 950;
+}
+
+.admin-deploy-center__header p,
+.admin-deploy-center__help p {
+  margin: 0;
+  color: #4f5d44;
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.admin-deploy-center button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #173a26;
+  color: #fff;
+  cursor: pointer;
+  padding: 0 13px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.admin-deploy-center button:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
+.admin-deploy-center__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-deploy-center__grid article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid rgba(67, 63, 45, 0.1);
+  border-radius: 8px;
+  background: #fffdf8;
+  padding: 11px;
+}
+
+.admin-deploy-center__grid strong {
+  color: #173a26;
+  font-size: 0.95rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.admin-deploy-center__help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(67, 63, 45, 0.1);
+  padding-top: 12px;
+}
+
 .admin-media-panel {
   display: grid;
   gap: 16px;
@@ -6968,9 +7092,15 @@ button {
 
   .admin-settings-grid,
   .admin-settings-summary,
+  .admin-deploy-center__grid,
   .admin-health-summary,
   .admin-health-card {
     grid-template-columns: 1fr;
+  }
+
+  .admin-deploy-center__header,
+  .admin-deploy-center__help {
+    display: grid;
   }
 
   .broadcast-history__header {

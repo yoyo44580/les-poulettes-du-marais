@@ -18,6 +18,10 @@ const updateNoticeDismissedKey = "pwa-update-notice-dismissed-at";
 const updateNoticeDismissMs = 60 * 60 * 1000;
 const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 const publicSiteUrl = (import.meta.env.VITE_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
+const appBuildVersion = import.meta.env.VITE_APP_VERSION || "0.0.0";
+const appBuildTime = import.meta.env.VITE_APP_BUILD_TIME || "";
+const appCommitRef = import.meta.env.VITE_APP_COMMIT || "";
+const appShortCommit = appCommitRef ? appCommitRef.slice(0, 7) : "local";
 
 const AVAILABLE_IMAGE_OPTIONS = [
   "/images/ane-1.jpg",
@@ -7004,6 +7008,16 @@ function openHomeFeaturedEventPage() {
                             <span>{getOrderSummary(order)}</span>
                             <strong>{getOrderEggs(order)} œufs</strong>
                           </div>
+                          <label className="egg-summary-status">
+                            <span>Statut</span>
+                            <select value={order.status} onChange={(e) => changeStatus(order.id, e.target.value)}>
+                              {orderStatusOptions.map((status) => (
+                                <option key={status.value} value={status.value}>
+                                  {status.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                         </div>
                       ))}
                     </div>
@@ -11035,6 +11049,49 @@ function openHomeFeaturedEventPage() {
                     <span>Orange</span>
                     <strong>{healthCheckCounts.warning}</strong>
                   </article>
+                </div>
+
+                <div className="admin-deploy-center">
+                  <div className="admin-deploy-center__header">
+                    <div>
+                      <span>Déploiement</span>
+                      <strong>Version installée</strong>
+                      <p>À vérifier après chaque publication Netlify ou si l'icône installée semble bloquée.</p>
+                    </div>
+                    <button type="button" onClick={checkForAppUpdate} disabled={checkingAppUpdate}>
+                      <RefreshCw size={18} />
+                      {checkingAppUpdate ? "Vérification..." : "Vérifier mise à jour"}
+                    </button>
+                  </div>
+
+                  <div className="admin-deploy-center__grid">
+                    <article>
+                      <span>Version</span>
+                      <strong>{appBuildVersion}</strong>
+                    </article>
+                    <article>
+                      <span>Build</span>
+                      <strong>{appBuildTime ? formatCreatedAtDateTime(appBuildTime) : "Non renseigné"}</strong>
+                    </article>
+                    <article>
+                      <span>Commit</span>
+                      <strong>{appShortCommit}</strong>
+                    </article>
+                    <article>
+                      <span>Site</span>
+                      <strong>{publicSiteDisplayUrl}</strong>
+                    </article>
+                  </div>
+
+                  <div className="admin-deploy-center__help">
+                    <p>
+                      Si Netlify indique un nouveau commit publié mais que l'icône installée ne change pas,
+                      ouvrez le site dans le navigateur, utilisez ce bouton, puis réinstallez l'icône si besoin.
+                    </p>
+                    <button type="button" onClick={() => window.location.reload()}>
+                      Recharger la page
+                    </button>
+                  </div>
                 </div>
 
                 <div className="admin-health-list">
