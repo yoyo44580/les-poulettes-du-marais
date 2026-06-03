@@ -1,3 +1,5 @@
+https://commandes.lespoulettesdumarais.fr/manifest.webmanifest /admin-commandes-subdomain.webmanifest 200
+http://commandes.lespoulettesdumarais.fr/manifest.webmanifest /admin-commandes-subdomain.webmanifest 200
 https://commandes.lespoulettesdumarais.fr/* /admin-commandes-oeufs.html 200
 http://commandes.lespoulettesdumarais.fr/* /admin-commandes-oeufs.html 200
 /admin-commandes-oeufs /admin-commandes-oeufs.html 200
