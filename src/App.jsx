@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, Image as ImageIcon } from "lucide-react";
+import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, BellRing, Image as ImageIcon } from "lucide-react";
 import "./App.css";
 
 const canUseBrowser = typeof window !== "undefined";
@@ -768,6 +768,7 @@ export default function EggSalesPWA() {
   const [currentUser, setCurrentUser] = useState(null);
   const [passwordResetEmailSent, setPasswordResetEmailSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showEggSummaryPassword, setShowEggSummaryPassword] = useState(false);
   const [name, setName] = useState("");
   const [products, setProducts] = useState(DEFAULT_PRODUCTS);
   const [cart, setCart] = useState({});
@@ -9076,6 +9077,33 @@ function openHomeFeaturedEventPage() {
 
         {screen === "myOrders" && (
           <section className="orders-page">
+            <aside className={`client-notification-guide ${clientPushStatus === "enabled" ? "is-enabled" : ""}`}>
+              <div>
+                <span>
+                  <BellRing size={22} />
+                </span>
+                <div>
+                  <strong>
+                    {clientPushStatus === "enabled"
+                      ? "Notifications activées"
+                      : "Activez les notifications pour être prévenu quand votre commande est prête."}
+                  </strong>
+                  <p>
+                    {clientPushStatus === "enabled"
+                      ? "Vous recevrez les informations importantes sur ce téléphone."
+                      : "Un seul bouton suffit. Vous pourrez recevoir les nouvelles de commande sans revenir vérifier l'application."}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={enableClientPushNotifications} disabled={clientPushStatus === "saving"}>
+                {clientPushStatus === "saving"
+                  ? "Activation..."
+                  : clientPushStatus === "enabled"
+                  ? "Déjà actif"
+                  : "Activer"}
+              </button>
+            </aside>
+
             <div className="orders-header">
               <div>
                 <p className="shop-eyebrow">Espace client</p>
