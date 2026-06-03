@@ -1,16 +1,55 @@
-# React + Vite
+# Les Poulettes du Marais
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Application PWA de commande d'oeufs frais avec espace client, gestion du stock et tableau de bord admin.
 
-Currently, two official plugins are available:
+## Commandes utiles
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+npm run lint
+npm run build
+npm run preview
+```
 
-## React Compiler
+## Variables d'environnement
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Copier `.env.example` vers `.env` si vous voulez configurer Supabase sans modifier le code.
 
-## Expanding the ESLint configuration
+```bash
+VITE_SUPABASE_URL=https://votre-projet.supabase.co
+VITE_SUPABASE_ANON_KEY=votre-cle-anon-publique
+VITE_PUBLIC_SITE_URL=https://votre-site-en-ligne.fr
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Mise en ligne PWA
+
+Pour Vercel, Netlify ou autre hebergeur statique :
+
+- commande de build : `npm run build`
+- dossier de sortie : `dist`
+- variables a configurer : `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` et `VITE_PUBLIC_SITE_URL`
+
+Apres mise en ligne, verifier :
+
+- la page d'accueil charge correctement
+- `/manifest.webmanifest` repond bien
+- `/sw.js` repond bien
+- l'installation PWA est proposee par le navigateur
+- les URLs de redirection Supabase incluent le domaine de production
+- dans Supabase Auth > URL Configuration, le Site URL et les Redirect URLs utilisent le meme domaine que `VITE_PUBLIC_SITE_URL`
+
+## Base de donnees Supabase
+
+Avant d'utiliser la gestion admin des produits et prix, appliquer la migration :
+
+```text
+supabase/migrations/20260520_products_and_order_items.sql
+```
+
+Elle ajoute :
+
+- la table `products`
+- la colonne `orders.items`
+- les produits oeufs par defaut
+- les droits de lecture et de modification admin

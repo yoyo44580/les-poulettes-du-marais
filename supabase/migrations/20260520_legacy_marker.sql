@@ -1,0 +1,4 @@
+-- Legacy marker.
+-- The original project had several migrations sharing the 20260520 version.
+-- This no-op file keeps Supabase migration history aligned on projects where
+-- that version was already recorded before the migrations were renamed.

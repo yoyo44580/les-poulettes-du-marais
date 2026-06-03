@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,10 +15,69 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+
+    if (!supabaseUrl || !anonKey || !serviceRoleKey || !RESEND_API_KEY) {
+      return new Response(JSON.stringify({ error: "Configuration email incomplete." }), {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: {
+        headers: {
+          Authorization: req.headers.get("Authorization") || "",
+        },
+      },
+    });
+    const { data: userData } = await authClient.auth.getUser();
+
+    if (!userData.user) {
+      return new Response(JSON.stringify({ error: "Non autorise." }), {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const { data: profile, error: profileError } = await adminClient
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", userData.user.id)
+      .single();
+
+    if (profileError || profile?.is_admin !== true) {
+      return new Response(JSON.stringify({ error: "Acces admin requis." }), {
+        status: 403,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
     const body = await req.json();
     const { clientEmail, clientName } = body;
 
-    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+    if (!clientEmail || !clientName) {
+      return new Response(JSON.stringify({ error: "Client incomplet." }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      });
+    }
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -26,7 +86,7 @@ serve(async (req) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Les Poulettes du Marais <onboarding@resend.dev>",
+        from: "Les Poulettes du Marais <commandes@lespoulettesdumarais.fr>",
         to: clientEmail,
         subject: "Votre commande est prête 🥚",
         html: `

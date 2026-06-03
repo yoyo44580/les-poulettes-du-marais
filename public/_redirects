@@ -1,0 +1,4 @@
+/admin-commandes-oeufs /admin-commandes-oeufs.html 200
+/admin-commandes-oeufs/* /admin-commandes-oeufs.html 200
+/tutoriels/* /tutoriels/:splat 200
+/* /index.html 200

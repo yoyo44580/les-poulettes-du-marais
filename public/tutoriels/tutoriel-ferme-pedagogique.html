@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Tutoriel ferme pedagogique - Les Poulettes du Marais</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff8ec; color: #173a26; font-family: "Segoe UI", Arial, sans-serif; line-height: 1.35; }
+    .page { min-height: 273mm; padding: 16mm; page-break-after: always; position: relative; overflow: hidden; border-radius: 18px; background: linear-gradient(135deg, rgba(255,253,246,.98), rgba(255,243,214,.94)), url("../images/groupe-scolaire-1.jpg") center / cover; }
+    .page::after { content: ""; position: absolute; right: -30mm; bottom: -34mm; width: 110mm; height: 110mm; border-radius: 50%; background: rgba(255,207,49,.28); }
+    .content { position: relative; z-index: 1; display: grid; gap: 14px; }
+    .cover { align-content: center; text-align: center; }
+    .logo { width: 42mm; height: 42mm; object-fit: contain; border-radius: 50%; margin: 0 auto 8mm; filter: drop-shadow(0 10px 18px rgba(55,42,20,.18)); }
+    .eyebrow { margin: 0; color: #8a4318; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+    h1,h2,h3 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0; }
+    h1 { margin: 0; font-size: 48px; line-height: .98; }
+    h2 { margin: 0; font-size: 34px; line-height: 1.05; }
+    h3 { margin: 0; font-size: 21px; color: #173a26; }
+    .subtitle { width: min(150mm, 100%); margin: 7mm auto 0; color: #3e4938; font-size: 18px; font-weight: 700; }
+    .quick-start,.memo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12mm; }
+    .memo-grid { grid-template-columns: repeat(2, 1fr); margin-top: 0; }
+    .pill,.card,.tip,.checklist { border: 1px solid rgba(67,63,45,.13); background: rgba(255,253,247,.94); box-shadow: 0 10px 24px rgba(34,31,18,.08); }
+    .pill { border-radius: 18px; padding: 12px; text-align: left; }
+    .pill strong { display: block; font-size: 18px; }
+    .pill span { color: #5c5549; font-weight: 700; font-size: 13px; }
+    .step-grid { display: grid; gap: 12px; }
+    .card { display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: start; border-radius: 18px; padding: 14px; }
+    .number { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: #ffd942; color: #173a26; font-size: 22px; font-weight: 950; }
+    .card p { margin: 5px 0 0; color: #4c473b; font-size: 15px; font-weight: 650; }
+    .two-cols { display: grid; grid-template-columns: 1fr 62mm; gap: 14px; align-items: start; }
+    .phone { border: 7px solid #173a26; border-radius: 26px; background: #fffdf8; padding: 12px; min-height: 116mm; box-shadow: 0 18px 38px rgba(34,31,18,.18); }
+    .screen { display: grid; gap: 9px; }
+    .screen-bar { height: 13px; border-radius: 999px; background: #e8dcc0; }
+    .screen-button { min-height: 34px; border-radius: 12px; background: #173a26; color: white; display: grid; align-items: center; padding: 0 12px; font-weight: 900; font-size: 13px; }
+    .screen-button.light { border: 1px solid rgba(67,63,45,.15); background: #fff4cb; color: #173a26; }
+    .tip,.checklist { border-radius: 18px; padding: 14px; }
+    .tip { background: #fff4cb; }
+    .tip strong { display: block; margin-bottom: 4px; color: #7a3c1b; font-size: 16px; }
+    .tip p,.checklist li { margin: 0; color: #4c473b; font-weight: 700; }
+    .checklist ul { margin: 8px 0 0; padding-left: 0; list-style: none; display: grid; gap: 8px; }
+    .checklist li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+    .check { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #173a26; color: white; font-size: 13px; font-weight: 900; }
+    .big-action { border-radius: 20px; background: #173a26; color: #fffdf8; padding: 18px; text-align: center; font-weight: 900; font-size: 22px; box-shadow: 0 16px 34px rgba(34,31,18,.16); }
+    .footer { position: absolute; left: 16mm; right: 16mm; bottom: 10mm; z-index: 1; display: flex; justify-content: space-between; color: #746a5a; font-size: 11px; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <section class="page cover">
+    <div class="content">
+      <img class="logo" src="../logo-poulettes.png" alt="Les Poulettes du Marais" />
+      <p class="eyebrow">Mode d'emploi client</p>
+      <h1>R&eacute;server une activit&eacute; &agrave; la ferme p&eacute;dagogique</h1>
+      <p class="subtitle">Un guide simple pour choisir une activit&eacute;, indiquer les participants et envoyer une demande &agrave; la ferme.</p>
+      <div class="quick-start">
+        <div class="pill"><strong>1. Vous choisissez l'activit&eacute;</strong><span>Visite, atelier ou animation.</span></div>
+        <div class="pill"><strong>2. Vous s&eacute;lectionnez une date</strong><span>Selon les cr&eacute;neaux propos&eacute;s.</span></div>
+        <div class="pill"><strong>3. Vous envoyez la demande</strong><span>La ferme confirme ensuite.</span></div>
+      </div>
+    </div>
+    <div class="footer"><span>Les Poulettes du Marais</span><span>Page 1</span></div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <p class="eyebrow">&Eacute;tape 1</p>
+      <h2>Choisir une activit&eacute;</h2>
+      <div class="two-cols">
+        <div class="step-grid">
+          <div class="card"><span class="number">1</span><div><h3>Ouvrez la ferme p&eacute;dagogique</h3><p>Depuis l'accueil, touchez &ldquo;Ferme p&eacute;dagogique&rdquo;.</p></div></div>
+          <div class="card"><span class="number">2</span><div><h3>Regardez les activit&eacute;s</h3><p>Chaque activit&eacute; pr&eacute;sente son contenu et ses informations principales.</p></div></div>
+          <div class="card"><span class="number">3</span><div><h3>Choisissez celle qui vous int&eacute;resse</h3><p>Visite, atelier, groupe, anniversaire ou animation selon les propositions.</p></div></div>
+          <div class="card"><span class="number">4</span><div><h3>Connectez-vous</h3><p>Votre demande sera reli&eacute;e &agrave; votre compte client pour le suivi.</p></div></div>
+        </div>
+        <div class="phone"><div class="screen"><div class="screen-bar"></div><div class="screen-button light">Accueil</div><div class="screen-button">Ferme p&eacute;dagogique</div><div class="screen-button light">Activit&eacute;s propos&eacute;es</div><div class="screen-button light">Photos</div><div class="screen-button">R&eacute;server</div></div></div>
+      </div>
+      <div class="tip"><strong>Bon &agrave; savoir</strong><p>La r&eacute;servation est une demande : la ferme confirme ensuite selon les places et l'organisation du jour.</p></div>
+    </div>
+    <div class="footer"><span>Choisir une activit&eacute;</span><span>Page 2</span></div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <p class="eyebrow">&Eacute;tape 2</p>
+      <h2>S&eacute;lectionner le jour et le cr&eacute;neau</h2>
+      <div class="two-cols">
+        <div class="step-grid">
+          <div class="card"><span class="number">1</span><div><h3>Consultez le calendrier</h3><p>Les dates disponibles apparaissent plus clairement pour choisir le bon jour.</p></div></div>
+          <div class="card"><span class="number">2</span><div><h3>Choisissez une date</h3><p>S&eacute;lectionnez la journ&eacute;e souhait&eacute;e pour l'activit&eacute;.</p></div></div>
+          <div class="card"><span class="number">3</span><div><h3>Choisissez le cr&eacute;neau</h3><p>Si plusieurs horaires sont propos&eacute;s, prenez celui qui vous convient.</p></div></div>
+          <div class="card"><span class="number">4</span><div><h3>V&eacute;rifiez le r&eacute;capitulatif</h3><p>Activit&eacute;, date et horaire doivent &ecirc;tre corrects avant de continuer.</p></div></div>
+        </div>
+        <div class="phone"><div class="screen"><div class="screen-bar"></div><div class="screen-button light">Calendrier</div><div class="screen-button">Date choisie</div><div class="screen-button">Cr&eacute;neau</div><div class="screen-button light">R&eacute;capitulatif</div><div class="screen-button">Continuer</div></div></div>
+      </div>
+      <div class="tip"><strong>Astuce</strong><p>Si une date est bloqu&eacute;e ou indisponible, choisissez une autre proposition affich&eacute;e dans le calendrier.</p></div>
+    </div>
+    <div class="footer"><span>Choisir le jour</span><span>Page 3</span></div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <p class="eyebrow">&Eacute;tape 3</p>
+      <h2>Remplir les informations de r&eacute;servation</h2>
+      <div class="memo-grid">
+        <div class="checklist"><h3>Participants</h3><ul><li><span class="check">✓</span><span>Indiquez le nombre d'enfants.</span></li><li><span class="check">✓</span><span>Ajoutez les &acirc;ges si demand&eacute;.</span></li><li><span class="check">✓</span><span>Pr&eacute;cisez le nombre d'adultes accompagnants.</span></li></ul></div>
+        <div class="checklist"><h3>Contact</h3><ul><li><span class="check">✓</span><span>V&eacute;rifiez votre nom et votre adresse e-mail.</span></li><li><span class="check">✓</span><span>Ajoutez un num&eacute;ro de t&eacute;l&eacute;phone joignable.</span></li><li><span class="check">✓</span><span>Notez les besoins particuliers si besoin.</span></li></ul></div>
+      </div>
+      <div class="tip"><strong>Pourquoi ces infos ?</strong><p>Elles permettent d'adapter l'activit&eacute; &agrave; l'&acirc;ge des enfants, au groupe et &agrave; l'organisation de la ferme.</p></div>
+      <div class="big-action">Vous envoyez la demande, puis la ferme vous confirme la r&eacute;servation.</div>
+    </div>
+    <div class="footer"><span>Infos r&eacute;servation</span><span>Page 4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <p class="eyebrow">M&eacute;mo rapide</p>
+      <h2>Avant de valider</h2>
+      <div class="memo-grid">
+        <div class="checklist"><h3>&Agrave; v&eacute;rifier</h3><ul><li><span class="check">✓</span><span>L'activit&eacute; choisie est la bonne.</span></li><li><span class="check">✓</span><span>La date et le cr&eacute;neau sont corrects.</span></li><li><span class="check">✓</span><span>Le nombre de participants est complet.</span></li></ul></div>
+        <div class="checklist"><h3>Apr&egrave;s l'envoi</h3><ul><li><span class="check">✓</span><span>Vous recevez une r&eacute;ponse apr&egrave;s validation.</span></li><li><span class="check">✓</span><span>Activez les notifications pour ne rien manquer.</span></li><li><span class="check">✓</span><span>Gardez votre compte client pour suivre vos demandes.</span></li></ul></div>
+      </div>
+      <div class="big-action">Ferme p&eacute;dagogique : activit&eacute;, date, participants, demande envoy&eacute;e.</div>
+    </div>
+    <div class="footer"><span>Les Poulettes du Marais</span><span>Page 5</span></div>
+  </section>
+</body>
+</html>

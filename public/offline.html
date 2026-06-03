@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#173a26" />
+    <title>Hors connexion - Les Poulettes du Marais</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100svh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background:
+          linear-gradient(145deg, rgba(255, 253, 247, 0.96), rgba(250, 238, 207, 0.9)),
+          url("/images/marais.jpg") center / cover;
+        color: #173a26;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(680px, 100%);
+        border: 1px solid rgba(67, 63, 45, 0.14);
+        border-radius: 18px;
+        background: rgba(255, 253, 247, 0.96);
+        padding: 34px;
+        text-align: center;
+        box-shadow: 0 20px 48px rgba(34, 31, 18, 0.14);
+      }
+
+      .icon {
+        display: inline-grid;
+        width: 74px;
+        height: 74px;
+        place-items: center;
+        border-radius: 50%;
+        background: #173a26;
+        color: #fffdf8;
+        font-size: 34px;
+        font-weight: 950;
+      }
+
+      h1 {
+        margin: 18px 0 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(34px, 8vw, 56px);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 16px auto 0;
+        max-width: 520px;
+        color: #4d473b;
+        font-size: 17px;
+        line-height: 1.5;
+      }
+
+      button {
+        min-height: 48px;
+        margin-top: 24px;
+        border: 0;
+        border-radius: 14px;
+        background: #173a26;
+        color: #fffdf8;
+        cursor: pointer;
+        padding: 0 20px;
+        font: inherit;
+        font-weight: 900;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="icon">!</span>
+      <h1>Vous êtes hors connexion</h1>
+      <p>
+        L'application Les Poulettes du Marais n'arrive pas à joindre internet.
+        Revenez ici dès que le réseau est rétabli pour commander, réserver ou accéder à l'admin.
+      </p>
+      <button type="button" onclick="window.location.reload()">Réessayer</button>
+    </main>
+  </body>
+</html>
