@@ -1,5 +1,5 @@
 {
-  "id": "/admin-commandes-oeufs?app=summary",
+  "id": "/admin-commandes-oeufs",
   "name": "Commandes œufs - Les Poulettes",
   "short_name": "Commandes œufs",
   "description": "Synthèse rapide des commandes d'œufs par date.",
@@ -7,7 +7,7 @@
   "theme_color": "#173a26",
   "background_color": "#fff8e7",
   "display": "standalone",
-  "start_url": "/admin-commandes-oeufs?app=summary",
+  "start_url": "/admin-commandes-oeufs?mini=1",
   "scope": "/admin-commandes-oeufs",
   "icons": [
     {

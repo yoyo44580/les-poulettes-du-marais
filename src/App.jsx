@@ -6908,7 +6908,7 @@ function openHomeFeaturedEventPage() {
                   </button>
                 )}
                 <button type="button" onClick={checkForAppUpdate} disabled={checkingAppUpdate}>
-                  {checkingAppUpdate ? "VÃ©rification..." : "Mise Ã  jour"}
+                  {checkingAppUpdate ? "Verification..." : "Mise a jour"}
                 </button>
                 <button type="button" onClick={() => void loadOrders()}>
                   Actualiser
