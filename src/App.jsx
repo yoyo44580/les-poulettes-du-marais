@@ -9250,8 +9250,8 @@ function openTutorialFromPage(guideId) {
                 </div>
                 <div className="client-account-info">
                   <article>
-                    <span>Nom</span>
-                    <strong>{clientAccountProfile?.full_name || name || "Non renseigné"}</strong>
+                    <span>Email</span>
+                    <strong>{clientAccountProfile?.email || currentUser?.email || "Non renseigné"}</strong>
                   </article>
                   <article>
                     <span>Téléphone</span>
@@ -9261,7 +9261,14 @@ function openTutorialFromPage(guideId) {
                     <span>Adresse</span>
                     <strong>{clientAccountProfile?.delivery_address || deliveryAddress || "Non renseignée"}</strong>
                   </article>
+                  <article className={clientPushStatus === "enabled" ? "is-ok" : "is-warning"}>
+                    <span>Notifications</span>
+                    <strong>{clientPushStatus === "enabled" ? "Activées" : "Non activées"}</strong>
+                  </article>
                 </div>
+                <button type="button" onClick={goToProfile} className="client-account-edit-button">
+                  Modifier mes infos
+                </button>
               </section>
 
               <section className="client-account-card">
