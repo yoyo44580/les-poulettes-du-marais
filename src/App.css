@@ -3711,6 +3711,53 @@ button {
   opacity: 0.72;
 }
 
+.inline-help-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(67, 63, 45, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 253, 247, 0.92);
+  color: #173a26;
+  padding: 12px 14px;
+  box-shadow: 0 10px 24px rgba(34, 31, 18, 0.05);
+}
+
+.inline-help-card > span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f6ecd5;
+  color: #173a26;
+}
+
+.inline-help-card p {
+  flex: 1 1 auto;
+  margin: 0;
+  color: #4d473b;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.inline-help-card button {
+  min-height: 38px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(23, 58, 38, 0.16);
+  border-radius: 10px;
+  background: #fffdf8;
+  color: #173a26;
+  cursor: pointer;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 950;
+}
+
 .client-account-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -8797,6 +8844,15 @@ button {
   }
 
   .client-notification-guide button {
+    width: 100%;
+  }
+
+  .inline-help-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inline-help-card button {
     width: 100%;
   }
 

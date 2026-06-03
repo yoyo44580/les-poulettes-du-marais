@@ -6917,6 +6917,11 @@ function openHomeFeaturedEventPage() {
   setScreen("event");
 }
 
+function openTutorialFromPage(guideId) {
+  setActiveTutorialId(guideId);
+  setScreen("tutorials");
+}
+
   if (isEggSummaryPage) {
     return (
       <main className="egg-summary-app">
@@ -8025,6 +8030,16 @@ function openHomeFeaturedEventPage() {
               </span>
             </div>
 
+            <aside className="inline-help-card">
+              <span>
+                <HelpCircle size={20} />
+              </span>
+              <p>Besoin d'aide ? Voir le tuto ferme pédagogique.</p>
+              <button type="button" onClick={() => openTutorialFromPage("education")}>
+                Voir le tuto
+              </button>
+            </aside>
+
             <div className="service-layout">
               <div className="service-panel">
                 <h2>Activités proposées</h2>
@@ -8322,6 +8337,16 @@ function openHomeFeaturedEventPage() {
                 <Dog size={42} />
               </span>
             </div>
+
+            <aside className="inline-help-card">
+              <span>
+                <HelpCircle size={20} />
+              </span>
+              <p>Besoin d'aide ? Voir le tuto pension canine.</p>
+              <button type="button" onClick={() => openTutorialFromPage("kennel")}>
+                Voir le tuto
+              </button>
+            </aside>
 
             <div className="service-layout">
               <div className="service-panel">
@@ -8896,6 +8921,16 @@ function openHomeFeaturedEventPage() {
               </div>
             </div>
 
+            <aside className="inline-help-card">
+              <span>
+                <HelpCircle size={20} />
+              </span>
+              <p>Besoin d'aide ? Voir le tuto commande.</p>
+              <button type="button" onClick={() => openTutorialFromPage("eggs")}>
+                Voir le tuto
+              </button>
+            </aside>
+
             <div className="shop-layout">
               <div className="product-grid">
                 {products.filter((p) => p.active).map((p) => (
@@ -9111,6 +9146,16 @@ function openHomeFeaturedEventPage() {
                   : clientPushStatus === "enabled"
                   ? "Déjà actif"
                   : "Activer"}
+              </button>
+            </aside>
+
+            <aside className="inline-help-card">
+              <span>
+                <HelpCircle size={20} />
+              </span>
+              <p>Besoin d'aide ? Retrouvez les tutos commande, pension et ferme pédagogique.</p>
+              <button type="button" onClick={() => openTutorialFromPage("eggs")}>
+                Voir les tutos
               </button>
             </aside>
 
