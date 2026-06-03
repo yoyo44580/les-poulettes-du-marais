@@ -6907,6 +6907,9 @@ function openHomeFeaturedEventPage() {
                     Installer l'icône
                   </button>
                 )}
+                <button type="button" onClick={checkForAppUpdate} disabled={checkingAppUpdate}>
+                  {checkingAppUpdate ? "VÃ©rification..." : "Mise Ã  jour"}
+                </button>
                 <button type="button" onClick={() => void loadOrders()}>
                   Actualiser
                 </button>
