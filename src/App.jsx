@@ -4,6 +4,8 @@ import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, 
 import "./App.css";
 
 const canUseBrowser = typeof window !== "undefined";
+const isEggSummarySubdomain =
+  canUseBrowser && window.location.hostname.toLowerCase().startsWith("commandes.");
 const isStandaloneDisplay =
   canUseBrowser &&
   (window.matchMedia?.("(display-mode: standalone)").matches ||
@@ -738,7 +740,8 @@ export default function EggSalesPWA() {
   const toastIdRef = useRef(0);
   const confirmDialogResolveRef = useRef(null);
   const isEggSummaryPage =
-    canUseBrowser && window.location.pathname.replace(/\/+$/, "") === "/admin-commandes-oeufs";
+    isEggSummarySubdomain ||
+    (canUseBrowser && window.location.pathname.replace(/\/+$/, "") === "/admin-commandes-oeufs");
   const [screen, setScreen] = useState("home");
   const [activeTutorialId, setActiveTutorialId] = useState("eggs");
   const [isLogged, setIsLogged] = useState(false);

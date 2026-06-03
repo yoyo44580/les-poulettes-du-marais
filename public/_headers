@@ -10,6 +10,9 @@
 /admin-commandes-oeufs.webmanifest
   Cache-Control: no-cache, no-store, must-revalidate
 
+/admin-commandes-subdomain.webmanifest
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
