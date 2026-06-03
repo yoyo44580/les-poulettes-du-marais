@@ -8541,14 +8541,22 @@ button {
     align-items: stretch;
     flex-direction: column;
     gap: 12px;
+    padding-inline: 12px;
   }
 
   .app-nav {
+    flex-wrap: nowrap;
     justify-content: flex-start;
+    overflow-x: auto;
+    padding: 2px 2px 8px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
   }
 
   .app-nav__button {
+    flex: 0 0 auto;
     min-height: 40px;
+    white-space: nowrap;
   }
 
   .install-banner,
@@ -9136,9 +9144,8 @@ button {
   }
 
   .admin-mobile-quickbar {
-    position: sticky;
-    top: 8px;
-    z-index: 18;
+    position: relative;
+    z-index: 1;
     display: flex;
     gap: 8px;
     overflow-x: auto;
@@ -9168,22 +9175,25 @@ button {
   }
 
   .admin-tabs {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 7px;
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+    gap: 9px;
+    padding: 8px;
   }
 
   .admin-tab-group {
-    min-width: 210px;
-    flex: 0 0 auto;
+    min-width: 0;
+    width: 100%;
+    flex: initial;
+    border-radius: 12px;
+    padding: 8px;
   }
 
   .admin-tab-group__buttons {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .admin-global-search__results {
@@ -9191,10 +9201,11 @@ button {
   }
 
   .admin-tabs button {
-    min-width: max-content;
-    flex: 0 0 auto;
+    min-width: 0;
+    flex: 1 1 calc(50% - 7px);
     min-height: 40px;
     padding-inline: 12px;
+    white-space: normal;
   }
 
   .statistics-card,
