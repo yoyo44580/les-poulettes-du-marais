@@ -6978,13 +6978,23 @@ function openHomeFeaturedEventPage() {
               </label>
               <label>
                 Mot de passe
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  autoComplete="current-password"
-                  required
-                />
+                <div className="egg-summary-password">
+                  <input
+                    type={showEggSummaryPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEggSummaryPassword((visible) => !visible)}
+                    aria-label={showEggSummaryPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                    title={showEggSummaryPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                  >
+                    <Eye size={18} />
+                  </button>
+                </div>
               </label>
               <button type="submit">Se connecter</button>
             </form>
@@ -8697,14 +8707,14 @@ function openHomeFeaturedEventPage() {
                     onClick={() => setScreen("login")}
                     className={screen === "login" ? "is-active" : ""}
                   >
-                    Connexion
+                    Déjà client ? Connectez-vous ici
                   </button>
                   <button
                     type="button"
                     onClick={() => setScreen("register")}
                     className={screen === "register" ? "is-active" : ""}
                   >
-                    Création
+                    Nouveau client ? Créez votre compte
                   </button>
                 </div>
               )}

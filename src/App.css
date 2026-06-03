@@ -122,6 +122,26 @@ button {
   font: inherit;
 }
 
+.egg-summary-password {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+}
+
+.egg-summary-password input {
+  min-width: 0;
+}
+
+.egg-summary-password button {
+  min-height: 44px;
+  border: 1px solid rgba(67, 63, 45, 0.18);
+  border-radius: 8px;
+  background: #f6ecd5;
+  color: #173a26;
+  cursor: pointer;
+  padding: 0;
+}
+
 .egg-summary-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3267,7 +3287,9 @@ button {
   background: transparent;
   color: #655a49;
   cursor: pointer;
+  padding: 8px 10px;
   font-weight: 850;
+  line-height: 1.2;
 }
 
 .auth-tabs button.is-active {
@@ -9234,6 +9256,10 @@ button {
 
   .auth-visual h1 {
     font-size: 40px;
+  }
+
+  .auth-tabs {
+    grid-template-columns: 1fr;
   }
 
   .service-hero {
