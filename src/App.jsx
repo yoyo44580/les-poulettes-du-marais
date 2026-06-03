@@ -3668,6 +3668,26 @@ async function createAdminKennelBooking(event) {
     ]);
   }
 
+  async function goToMyReservations() {
+    setScreen("myReservations");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+
+    if (!sessionData.session) {
+      showToast("Tu dois être connecté.");
+      setScreen("login");
+      return;
+    }
+
+    const user = sessionData.session.user;
+    setCurrentUser(user);
+    await Promise.all([
+      loadCustomerProfiles(),
+      loadEducationBookings(),
+      loadKennelBookings(),
+    ]);
+  }
+
   async function goToProfile() {
     const { data: sessionData } = await supabase.auth.getSession();
 
@@ -9194,12 +9214,12 @@ function openTutorialFromPage(guideId) {
                 <em>{latestClientOrderStatus ? `Dernière commande : ${latestClientOrderStatus}` : "Passer une commande d'oeufs"}</em>
                 <ChevronRight size={20} />
               </button>
-              <button type="button" onClick={() => setScreen("education")}>
+              <button type="button" onClick={goToMyReservations}>
                 <span>
-                  <School size={24} />
+                  <CalendarCheck size={24} />
                 </span>
-                <strong>Ferme pédagogique</strong>
-                <em>{clientAccountEducationBookings.length} réservation{clientAccountEducationBookings.length > 1 ? "s" : ""}</em>
+                <strong>Mes réservations</strong>
+                <em>{clientAccountEducationBookings.length + clientAccountKennelBookings.length} réservation{clientAccountEducationBookings.length + clientAccountKennelBookings.length > 1 ? "s" : ""}</em>
                 <ChevronRight size={20} />
               </button>
               <button type="button" onClick={() => setScreen("kennel")}>
@@ -9358,6 +9378,77 @@ function openTutorialFromPage(guideId) {
                     </article>
                   ))}
                   {clientAccountDogs.length === 0 && <p>Aucune fiche chien pour le moment.</p>}
+                </div>
+              </section>
+            </div>
+          </section>
+        )}
+
+        {screen === "myReservations" && (
+          <section className="orders-page">
+            <div className="orders-header">
+              <div>
+                <p className="shop-eyebrow">Espace client</p>
+                <h1>Mes réservations</h1>
+                <p>Retrouvez vos demandes ferme pédagogique et pension canine au même endroit.</p>
+              </div>
+
+              <div className="profile-actions">
+                <button type="button" onClick={goToMyOrders} className="secondary-action">
+                  Retour mon compte
+                </button>
+                <button type="button" onClick={() => setScreen("education")} className="secondary-action">
+                  Réserver ferme
+                </button>
+                <button type="button" onClick={() => setScreen("kennel")} className="primary-action">
+                  Réserver pension
+                  <ArrowRight size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="client-reservations-grid">
+              <section className="client-account-card">
+                <div className="client-account-title">
+                  <span><School size={22} /></span>
+                  <div>
+                    <h2>Ferme pédagogique</h2>
+                    <p>{clientAccountEducationBookings.length} réservation{clientAccountEducationBookings.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+                <div className="client-account-list client-reservation-list">
+                  {clientAccountEducationBookings.map((booking) => (
+                    <article key={booking.id}>
+                      <strong>{formatDeliveryDate(booking.booking_date)} - {booking.activity_type || "Activité ferme"}</strong>
+                      <span>{booking.participants} participant{Number(booking.participants || 0) > 1 ? "s" : ""}</span>
+                      <em>{booking.status || "Demandée"}</em>
+                    </article>
+                  ))}
+                  {clientAccountEducationBookings.length === 0 && (
+                    <p>Aucune réservation ferme pédagogique pour le moment.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="client-account-card">
+                <div className="client-account-title">
+                  <span><PawPrint size={22} /></span>
+                  <div>
+                    <h2>Pension canine</h2>
+                    <p>{clientAccountKennelBookings.length} séjour{clientAccountKennelBookings.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+                <div className="client-account-list client-reservation-list">
+                  {clientAccountKennelBookings.map((booking) => (
+                    <article key={booking.id}>
+                      <strong>{booking.dog?.name || "Chien"} - {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
+                      <span>{booking.phone || "Téléphone non renseigné"}</span>
+                      <em>{booking.status || "Demandée"}</em>
+                    </article>
+                  ))}
+                  {clientAccountKennelBookings.length === 0 && (
+                    <p>Aucun séjour pension canine pour le moment.</p>
+                  )}
                 </div>
               </section>
             </div>
