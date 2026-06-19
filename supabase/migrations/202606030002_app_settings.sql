@@ -8,7 +8,7 @@ values (
     "site_url": "",
     "google_review_url": "https://g.page/r/CSmAsTCUXluPEBM/review",
     "google_maps_url": "https://www.google.com/maps/search/?api=1&query=Les%20Poulettes%20du%20Marais%20Bourneuf-en-Retz",
-    "kennel_capacity_note": "4 chiens par nuit",
+    "kennel_capacity_note": "4 chiens par jour",
     "admin_note": ""
   }'::jsonb
 )

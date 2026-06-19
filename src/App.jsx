@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, BellRing, Image as ImageIcon } from "lucide-react";
+import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, BellRing, Smartphone, Image as ImageIcon } from "lucide-react";
+import KennelContractModal from "./KennelContractModal";
 import "./App.css";
 
 const canUseBrowser = typeof window !== "undefined";
@@ -207,6 +208,32 @@ const TUTORIAL_GUIDES = [
     ],
     memo: ["Activité choisie", "Date vérifiée", "Participants indiqués", "Demande envoyée"],
   },
+  {
+    id: "install",
+    title: "Installer l'appli sur votre téléphone",
+    intro: "Le guide simple pour ajouter Les Poulettes du Marais sur l'écran d'accueil d'un iPhone ou d'un téléphone Android.",
+    pdfUrl: "/tutoriels/tutoriel-installer-appli-simple.pdf",
+    icon: "app",
+    steps: [
+      {
+        title: "Ouvrir le site avec le bon navigateur",
+        text: "Sur iPhone, utilisez Safari. Sur Android, utilisez Chrome. C'est ce qui permet d'ajouter facilement l'appli.",
+      },
+      {
+        title: "Ouvrir le menu d'installation",
+        text: "Sur iPhone, appuyez sur le bouton de partage. Sur Android, appuyez sur les trois petits points en haut à droite.",
+      },
+      {
+        title: "Ajouter l'appli à l'écran d'accueil",
+        text: "Choisissez Ajouter à l'écran d'accueil, Installer l'application ou Ajouter, selon ce que votre téléphone propose.",
+      },
+      {
+        title: "Ouvrir l'appli avec son icône",
+        text: "Une nouvelle icône apparaît sur votre écran d'accueil. Vous pouvez ensuite ouvrir l'appli comme une application classique.",
+      },
+    ],
+    memo: ["Safari sur iPhone", "Chrome sur Android", "Icône ajoutée à l'écran d'accueil", "Notifications activées"],
+  },
 ];
 
 const DEFAULT_PRODUCTS = [
@@ -319,13 +346,18 @@ const emptyKennelBookingForm = {
   startDate: "",
   endDate: "",
   phone: "",
+  ownerInsurance: "",
+  veterinarianName: "",
   dogName: "",
   dogPhotoUrl: "",
   dogBreed: "",
   dogBirthYear: "",
   dogSex: "",
+  dogMicrochipNumber: "",
+  dogNotMicrochipped: false,
   vaccinesUpToDate: false,
   sterilized: false,
+  photoConsent: "",
   notes: "",
 };
 
@@ -346,6 +378,8 @@ const emptyAdminKennelBookingForm = {
   dogBreed: "",
   dogBirthYear: "",
   dogSex: "",
+  dogMicrochipNumber: "",
+  dogNotMicrochipped: false,
   vaccinesUpToDate: false,
   sterilized: false,
   notes: "",
@@ -384,6 +418,7 @@ const emptyHomeNewsForm = {
   title: "",
   text: "",
   image_url: "",
+  gallery_images: "",
   published_at: "",
   active: true,
 };
@@ -391,6 +426,64 @@ const emptyHomeNewsForm = {
 const DEFAULT_HOME_NEWS_CONTENT = {
   items: [],
 };
+
+const DEFAULT_OCCASIONAL_SALES_CONTENT = {
+  enabled: false,
+  eyebrow: "Vente ponctuelle",
+  title: "Réservations du moment",
+  text: "Retrouvez ici les ventes disponibles en quantité limitée à la ferme.",
+  notice_text: "Pensez à prévoir un carton ou une caisse adaptée pour le transport.",
+  image_url: "/images/marais.jpg",
+  items: [
+    {
+      id: "reform-hens",
+      name: "Poules de réforme",
+      description: "Poules pondeuses proposées ponctuellement pour leur offrir une nouvelle maison.",
+      price: "",
+      unit_label: "poule",
+      available_quantity: "",
+      image_url: "",
+      active: true,
+    },
+    {
+      id: "apple-juice",
+      name: "Jus de pomme local",
+      description: "Jus de pomme fabriqué par une association locale, disponible selon les arrivages.",
+      price: "",
+      unit_label: "bouteille",
+      available_quantity: "",
+      image_url: "",
+      active: true,
+    },
+  ],
+};
+
+const emptyOccasionalSaleReservationForm = {
+  itemId: "reform-hens",
+  quantity: 1,
+  fullName: "",
+  email: "",
+  phone: "",
+  notes: "",
+};
+
+function getOccasionalSaleAvailableQuantity(item) {
+  const rawQuantity = String(item?.available_quantity ?? "").trim();
+
+  if (!rawQuantity) {
+    return null;
+  }
+
+  const quantity = Number(rawQuantity.replace(",", "."));
+
+  return Number.isFinite(quantity) ? quantity : null;
+}
+
+function isOccasionalSaleItemComplete(item) {
+  const quantity = getOccasionalSaleAvailableQuantity(item);
+
+  return quantity !== null && quantity <= 0;
+}
 
 const DEFAULT_KENNEL_SERVICES = [
   {
@@ -403,10 +496,10 @@ const DEFAULT_KENNEL_SERVICES = [
   },
   {
     id: "overnight",
-    name: "Nuitée pension",
-    description: "Séjour avec nuitée, fiche chien et habitudes à préciser.",
+    name: "Journée pension",
+    description: "Séjour facturé à la journée, fiche chien et habitudes à préciser.",
     price: 0,
-    unit_label: "nuit",
+    unit_label: "jour",
     active: true,
   },
   {
@@ -482,7 +575,7 @@ const DEFAULT_APP_SETTINGS = {
   site_url: publicSiteUrl,
   google_review_url: GOOGLE_REVIEW_WRITE_URL,
   google_maps_url: GOOGLE_REVIEW_URL,
-  kennel_capacity_note: `${KENNEL_MAX_BOOKINGS_PER_NIGHT} chiens par nuit`,
+  kennel_capacity_note: `${KENNEL_MAX_BOOKINGS_PER_NIGHT} chiens par jour`,
   admin_note: "",
 };
 const MESSAGE_TEMPLATES = [
@@ -570,17 +663,26 @@ function shiftMonth(monthValue, delta) {
   return getLocalIsoDate(date).slice(0, 7);
 }
 
-function getKennelNights(startDate, endDate) {
-  const nights = [];
+function getKennelCalendarStayDates(startDate, endDate) {
+  const dates = [];
+
+  if (!startDate || !endDate || endDate < startDate) {
+    return dates;
+  }
+
   const current = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
 
-  while (current < end) {
-    nights.push(getLocalIsoDate(current));
+  while (current <= end) {
+    dates.push(getLocalIsoDate(current));
     current.setDate(current.getDate() + 1);
   }
 
-  return nights;
+  return dates;
+}
+
+function getKennelBookingDays(startDate, endDate) {
+  return getKennelCalendarStayDates(startDate, endDate).length;
 }
 
 function getAutomaticDeliverySlots() {
@@ -736,6 +838,59 @@ function normalizeOrderStatus(status) {
   return legacyStatuses[status] || status;
 }
 
+function normalizeAddressForComparison(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function ReservationAccountGate({ subject, onLogin, onRegister }) {
+  return (
+    <aside className="reservation-account-gate">
+      <span><ShieldCheck size={28} /></span>
+      <div>
+        <p>Compte client obligatoire</p>
+        <h2>Connectez-vous pour réserver {subject}</h2>
+        <p>Votre réservation sera ainsi conservée dans votre espace client avec son statut et son historique.</p>
+      </div>
+      <div className="reservation-account-gate__actions">
+        <button type="button" className="primary-action" onClick={onLogin}>Déjà client ? Se connecter</button>
+        <button type="button" className="secondary-action" onClick={onRegister}>Nouveau client ? Créer un compte</button>
+      </div>
+    </aside>
+  );
+}
+
+const clientOrderCancelWindowMs = 6 * 60 * 60 * 1000;
+
+function getClientOrderCancelInfo(order) {
+  const normalizedStatus = normalizeOrderStatus(order?.status || "");
+  const createdAt = order?.created_at ? new Date(order.created_at) : null;
+  const createdTime = createdAt?.getTime();
+
+  if (!order || normalizedStatus === "Annulée") {
+    return { canCancel: false, reason: "Commande déjà annulée." };
+  }
+
+  if (!["À préparer", "A préparer", "Demandée", "Demandee"].includes(normalizedStatus)) {
+    return { canCancel: false, reason: "La commande est déjà en préparation avancée." };
+  }
+
+  if (!createdAt || Number.isNaN(createdTime)) {
+    return { canCancel: false, reason: "Heure de création indisponible." };
+  }
+
+  const expiresAt = new Date(createdTime + clientOrderCancelWindowMs);
+
+  if (Date.now() > expiresAt.getTime()) {
+    return { canCancel: false, expiresAt, reason: "Le délai d'annulation de 6h est dépassé." };
+  }
+
+  return { canCancel: true, expiresAt, reason: "" };
+}
+
 function getOrderStatusStep(status) {
   const normalizedStatus = normalizeOrderStatus(status || "À préparer");
 
@@ -757,6 +912,7 @@ function getOrderStatusStep(status) {
 export default function EggSalesPWA() {
   const toastIdRef = useRef(0);
   const confirmDialogResolveRef = useRef(null);
+  const kennelPaymentReminderRunRef = useRef("");
   const isEggSummaryPage =
     isEggSummarySubdomain ||
     (canUseBrowser && window.location.pathname.replace(/\/+$/, "") === "/admin-commandes-oeufs");
@@ -775,14 +931,25 @@ export default function EggSalesPWA() {
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [orderComment, setOrderComment] = useState("");
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orders, setOrders] = useState([]);
   const [myOrders, setMyOrders] = useState([]);
+  const [myOccasionalSaleReservations, setMyOccasionalSaleReservations] = useState([]);
   const [customerProfiles, setCustomerProfiles] = useState([]);
+  const [addressValidationRunning, setAddressValidationRunning] = useState(false);
+  const [addressValidationProgress, setAddressValidationProgress] = useState({ current: 0, total: 0 });
   const [clientPushSubscriptions, setClientPushSubscriptions] = useState([]);
   const [adminPushSubscriptions, setAdminPushSubscriptions] = useState([]);
   const [trafficEvents, setTrafficEvents] = useState([]);
   const [stockEggs, setStockEggs] = useState(0);
   const [stockInput, setStockInput] = useState(0);
+  const [eggProductionLogs, setEggProductionLogs] = useState([]);
+  const [eggProductionForm, setEggProductionForm] = useState({
+    logDate: getLocalIsoDate(),
+    eggsCollected: "",
+    notes: "",
+  });
+  const [eggProductionCalendarMonth, setEggProductionCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
   const [adminFilter, setAdminFilter] = useState("En cours");
   const [adminOrderShortcut, setAdminOrderShortcut] = useState("all");
   const [adminArchiveView, setAdminArchiveView] = useState("active");
@@ -794,7 +961,11 @@ export default function EggSalesPWA() {
   const [clientQuickFilter, setClientQuickFilter] = useState("all");
   const [clientSort, setClientSort] = useState("created-desc");
   const [selectedClientProfileId, setSelectedClientProfileId] = useState("");
+  const [selectedDogProfileId, setSelectedDogProfileId] = useState("");
   const [adminView, setAdminView] = useState("overview");
+  const [cancellationsSeenAt, setCancellationsSeenAt] = useState(() =>
+    canUseBrowser ? localStorage.getItem("admin-cancellations-seen-at") || "" : ""
+  );
   const [educationReservationFilter, setEducationReservationFilter] = useState("pending");
   const [kennelReservationFilter, setKennelReservationFilter] = useState("pending");
   const [accountingStartDate, setAccountingStartDate] = useState("");
@@ -810,6 +981,10 @@ export default function EggSalesPWA() {
   const [homeNewsContent, setHomeNewsContent] = useState(DEFAULT_HOME_NEWS_CONTENT);
   const [homeNewsForm, setHomeNewsForm] = useState(emptyHomeNewsForm);
   const [activeHomeNewsIndex, setActiveHomeNewsIndex] = useState(0);
+  const [occasionalSalesContent, setOccasionalSalesContent] = useState(DEFAULT_OCCASIONAL_SALES_CONTENT);
+  const [occasionalSalesForm, setOccasionalSalesForm] = useState(DEFAULT_OCCASIONAL_SALES_CONTENT);
+  const [occasionalSaleReservations, setOccasionalSaleReservations] = useState([]);
+  const [occasionalSaleReservationForm, setOccasionalSaleReservationForm] = useState(emptyOccasionalSaleReservationForm);
   const [homeFeaturedEvent, setHomeFeaturedEvent] = useState(DEFAULT_HOME_FEATURED_EVENT);
   const [homeFeaturedEventForm, setHomeFeaturedEventForm] = useState(DEFAULT_HOME_FEATURED_EVENT);
   const [kennelContent, setKennelContent] = useState(DEFAULT_KENNEL_CONTENT);
@@ -832,6 +1007,8 @@ export default function EggSalesPWA() {
   const [kennelServices, setKennelServices] = useState(DEFAULT_KENNEL_SERVICES);
   const [kennelServiceForm, setKennelServiceForm] = useState(emptyKennelServiceForm);
   const [kennelBookings, setKennelBookings] = useState([]);
+  const [kennelContracts, setKennelContracts] = useState([]);
+  const [selectedContractBooking, setSelectedContractBooking] = useState(null);
   const [kennelAvailability, setKennelAvailability] = useState([]);
   const [educationCalendarMonth, setEducationCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
   const [clientKennelCalendarMonth, setClientKennelCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
@@ -846,6 +1023,8 @@ export default function EggSalesPWA() {
   const [adminReminders, setAdminReminders] = useState([]);
   const [adminReminderForm, setAdminReminderForm] = useState(emptyAdminReminderForm);
   const [adminActionLogs, setAdminActionLogs] = useState([]);
+  const [adminNotificationFilter, setAdminNotificationFilter] = useState("unread");
+  const [preparedMessageKinds, setPreparedMessageKinds] = useState({});
   const [announcementForm, setAnnouncementForm] = useState(emptyAnnouncementForm);
   const [announcementHistory, setAnnouncementHistory] = useState([]);
   const [announcementSending, setAnnouncementSending] = useState(false);
@@ -875,6 +1054,15 @@ export default function EggSalesPWA() {
     phone: "",
     deliveryAddress: "",
   });
+  const [addressLookup, setAddressLookup] = useState({
+    register: { suggestions: [], loading: false, selected: "", manual: false },
+    profile: { suggestions: [], loading: false, selected: "", manual: false },
+  });
+  const addressLookupAbortRef = useRef({});
+  const registerSelectedAddress = addressLookup.register.selected;
+  const profileSelectedAddress = addressLookup.profile.selected;
+  const registerManualAddress = addressLookup.register.manual;
+  const profileManualAddress = addressLookup.profile.manual;
 
   const imageOptions = useMemo(() => {
     const customImages = parseGalleryImages(customPhotoLibrary.images);
@@ -889,7 +1077,8 @@ export default function EggSalesPWA() {
         .sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || ""))),
     [homeNewsContent.items]
   );
-  const activeHomeNews = homeNewsItems[activeHomeNewsIndex] || homeNewsItems[0] || null;
+const activeHomeNews = homeNewsItems[activeHomeNewsIndex] || homeNewsItems[0] || null;
+const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((item) => item.active !== false);
   const publicFarmName = appSettings.farm_name || DEFAULT_APP_SETTINGS.farm_name;
   const publicContactEmail = appSettings.contact_email || "lespoulettesdumarais@gmail.com";
   const publicContactPhone = appSettings.contact_phone || "06 70 20 38 91";
@@ -921,6 +1110,156 @@ export default function EggSalesPWA() {
   function closeToast() {
     setToastMessage(null);
   }
+
+  function setAddressLookupState(scope, update) {
+    setAddressLookup((current) => ({
+      ...current,
+      [scope]: {
+        ...current[scope],
+        ...(typeof update === "function" ? update(current[scope]) : update),
+      },
+    }));
+  }
+
+  function updateDeliveryAddress(scope, value) {
+    if (scope === "profile") {
+      setProfileForm((current) => ({ ...current, deliveryAddress: value }));
+    } else {
+      setForm((current) => ({ ...current, deliveryAddress: value }));
+    }
+
+    setAddressLookupState(scope, (current) => ({
+      selected: current.selected === value ? current.selected : "",
+      manual: current.manual && current.selected !== value ? current.manual : false,
+    }));
+  }
+
+  function selectDeliveryAddress(scope, suggestion) {
+    const label = suggestion.label || "";
+
+    if (scope === "profile") {
+      setProfileForm((current) => ({ ...current, deliveryAddress: label }));
+    } else {
+      setForm((current) => ({ ...current, deliveryAddress: label }));
+    }
+
+    setAddressLookupState(scope, {
+      selected: label,
+      suggestions: [],
+      loading: false,
+      manual: false,
+    });
+  }
+
+  function allowManualDeliveryAddress(scope) {
+    setAddressLookupState(scope, {
+      selected: "",
+      suggestions: [],
+      loading: false,
+      manual: true,
+    });
+    showToast("Adresse saisie manuellement : elle sera enregistrée sans vérification automatique.");
+  }
+
+  function renderAddressSuggestions(scope) {
+    const lookup = addressLookup[scope];
+
+    return (
+      <div className="address-lookup">
+        {lookup.loading && <span className="address-lookup__hint">Recherche de l'adresse...</span>}
+        {!lookup.loading && lookup.selected && <span className="address-lookup__valid">Adresse vérifiée</span>}
+        {!lookup.loading && lookup.manual && (
+          <span className="address-lookup__manual">Adresse saisie manuellement</span>
+        )}
+        {!lookup.loading && !lookup.selected && !lookup.manual && (
+          <span className="address-lookup__hint">Commencez à taper puis choisissez une adresse proposée.</span>
+        )}
+        {lookup.suggestions.length > 0 && (
+          <div className="address-lookup__list">
+            {lookup.suggestions.map((suggestion) => (
+              <button
+                key={suggestion.id}
+                type="button"
+                onClick={() => selectDeliveryAddress(scope, suggestion)}
+              >
+                <strong>{suggestion.name}</strong>
+                <span>{suggestion.context}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {!lookup.selected && !lookup.manual && (
+          <button type="button" className="address-lookup__manual-button" onClick={() => allowManualDeliveryAddress(scope)}>
+            Je ne trouve pas mon adresse
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  useEffect(() => {
+    const lookupControllers = addressLookupAbortRef.current;
+    const scopes = [
+      { key: "register", value: form.deliveryAddress, selected: registerSelectedAddress, manual: registerManualAddress },
+      { key: "profile", value: profileForm.deliveryAddress, selected: profileSelectedAddress, manual: profileManualAddress },
+    ];
+
+    scopes.forEach(({ key, value, selected, manual }) => {
+      const query = String(value || "").trim();
+
+      window.clearTimeout(lookupControllers[`${key}Timer`]);
+      lookupControllers[key]?.abort?.();
+
+      if (manual || selected === query) {
+        setAddressLookupState(key, { suggestions: [], loading: false });
+        return;
+      }
+
+      if (query.length < 5) {
+        setAddressLookupState(key, { suggestions: [], loading: false });
+        return;
+      }
+
+      setAddressLookupState(key, { loading: true });
+      lookupControllers[`${key}Timer`] = window.setTimeout(async () => {
+        const controller = new AbortController();
+        lookupControllers[key] = controller;
+
+        try {
+          const response = await fetch(
+            `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5&autocomplete=1`,
+            { signal: controller.signal }
+          );
+          const data = await response.json();
+          const suggestions = (data.features || []).map((feature) => ({
+            id: feature.properties?.id || feature.properties?.label,
+            label: feature.properties?.label || "",
+            name: feature.properties?.name || feature.properties?.label || "",
+            context: feature.properties?.context || "",
+          })).filter((suggestion) => suggestion.label);
+
+          setAddressLookupState(key, { suggestions, loading: false });
+        } catch (error) {
+          if (error.name !== "AbortError") {
+            setAddressLookupState(key, { suggestions: [], loading: false });
+          }
+        }
+      }, 350);
+    });
+
+    return () => {
+      scopes.forEach(({ key }) => {
+        window.clearTimeout(lookupControllers[`${key}Timer`]);
+      });
+    };
+  }, [
+    form.deliveryAddress,
+    profileForm.deliveryAddress,
+    registerSelectedAddress,
+    profileSelectedAddress,
+    registerManualAddress,
+    profileManualAddress,
+  ]);
 
   function requestConfirm({ title, message, confirmLabel = "Confirmer", cancelLabel = "Annuler", tone = "warning" }) {
     return new Promise((resolve) => {
@@ -1376,6 +1715,7 @@ export default function EggSalesPWA() {
           title: item.title || "",
           text: item.text || "",
           image_url: normalizeImageUrl(item.image_url),
+          gallery_images: parseGalleryImages(item.gallery_images),
           published_at: item.published_at || "",
           active: item.active !== false,
         }))
@@ -1383,6 +1723,62 @@ export default function EggSalesPWA() {
 
     setHomeNewsContent({ items: normalizedItems });
   }, []);
+
+  const loadOccasionalSalesContent = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "occasional_sales")
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Ventes ponctuelles indisponibles.", error.message);
+      setOccasionalSalesContent(DEFAULT_OCCASIONAL_SALES_CONTENT);
+      setOccasionalSalesForm(DEFAULT_OCCASIONAL_SALES_CONTENT);
+      return;
+    }
+
+    const content = {
+      ...DEFAULT_OCCASIONAL_SALES_CONTENT,
+      ...(data?.value || {}),
+    };
+    const savedItems = Array.isArray(content.items) ? content.items : [];
+    const normalizedItems = DEFAULT_OCCASIONAL_SALES_CONTENT.items.map((defaultItem) => ({
+      ...defaultItem,
+      ...(savedItems.find((item) => item.id === defaultItem.id) || {}),
+    }));
+    const normalizedContent = {
+      ...content,
+      image_url: normalizeImageUrl(content.image_url),
+      items: normalizedItems.map((item) => ({
+        ...item,
+        image_url: normalizeImageUrl(item.image_url),
+        active: item.active !== false,
+      })),
+    };
+
+    setOccasionalSalesContent(normalizedContent);
+    setOccasionalSalesForm(normalizedContent);
+    setOccasionalSaleReservationForm((current) => ({
+      ...current,
+      itemId: normalizedContent.items.find((item) => item.active !== false)?.id || "reform-hens",
+    }));
+  }, []);
+
+  async function loadOccasionalSaleReservations() {
+    const { data, error } = await supabase
+      .from("occasional_sale_reservations")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Réservations ventes ponctuelles indisponibles.", error.message);
+      setOccasionalSaleReservations([]);
+      return;
+    }
+
+    setOccasionalSaleReservations(data || []);
+  }
 
   const loadAppSettings = useCallback(async () => {
     const { data, error } = await supabase
@@ -1442,12 +1838,13 @@ export default function EggSalesPWA() {
       void loadCustomPhotoLibrary();
       void loadHomeFeaturedEvent();
       void loadHomeNews();
+      void loadOccasionalSalesContent();
       void loadKennelContent();
       void loadAppSettings();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [loadAboutContent, loadAppSettings, loadCustomPhotoLibrary, loadHomeFeaturedEvent, loadHomeNews, loadKennelContent]);
+  }, [loadAboutContent, loadAppSettings, loadCustomPhotoLibrary, loadHomeFeaturedEvent, loadHomeNews, loadKennelContent, loadOccasionalSalesContent]);
 
   const loadEducationActivities = useCallback(async () => {
     const { data, error } = await supabase
@@ -1611,6 +2008,11 @@ export default function EggSalesPWA() {
       return;
     }
 
+    if (addressLookup.register.selected !== cleanDeliveryAddress && !addressLookup.register.manual) {
+      showToast("Merci de choisir une adresse dans la liste proposée, ou cliquez sur “Je ne trouve pas mon adresse”.");
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password: form.password,
@@ -1629,7 +2031,7 @@ export default function EggSalesPWA() {
     }
 
     if (!data.user) {
-      showToast("Compte créé. Vérifie ton email si Supabase demande une confirmation.");
+      showToast("Compte créé. Vérifiez votre email si Supabase demande une confirmation.");
       return;
     }
 
@@ -1656,7 +2058,7 @@ setIsAdmin(false);
 setCanOrderEggs(false);
 setScreen("login");
 
-showToast("Compte créé avec succès ! Connecte-toi maintenant pour passer commande.");
+showToast("Compte créé avec succès ! Connectez-vous maintenant pour passer commande.");
   }
 
   async function loginAsClient(e) {
@@ -1790,11 +2192,14 @@ if (missingProfileContact) {
       await loadAdminActionLogs();
       await loadAnnouncementHistory();
       await loadAppSettings();
+      await loadOccasionalSaleReservations();
       await loadTrafficEvents();
+      await loadEggProductionLogs();
       setScreen("admin");
     } else {
       setIsAdmin(false);
       await loadMyOrders(user.id);
+      await loadMyOccasionalSaleReservations(user.email);
       setScreen("shop");
       await loadStock();
     }
@@ -1808,7 +2213,7 @@ if (missingProfileContact) {
     const cleanEmail = form.email.trim();
 
     if (!cleanEmail) {
-      showToast("Renseigne ton email pour recevoir le lien de réinitialisation.");
+      showToast("Renseignez votre email pour recevoir le lien de réinitialisation.");
       return;
     }
 
@@ -1817,7 +2222,7 @@ if (missingProfileContact) {
     const redirectBaseUrl = publicSiteUrl || (!isLocalOrigin ? currentOrigin : "");
 
     if (!redirectBaseUrl) {
-      showToast("Impossible d'envoyer le lien depuis l'adresse locale. Configure VITE_PUBLIC_SITE_URL avec l'adresse du site en ligne.");
+      showToast("Impossible d'envoyer le lien depuis l'adresse locale. Configurez VITE_PUBLIC_SITE_URL avec l'adresse du site en ligne.");
       return;
     }
 
@@ -1833,14 +2238,14 @@ if (missingProfileContact) {
     }
 
     setPasswordResetEmailSent(true);
-    showToast("Email envoyé. Regarde ta boîte mail pour créer un nouveau mot de passe.");
+    showToast("Email envoyé. Regardez votre boîte mail pour créer un nouveau mot de passe.");
   }
 
   async function updateForgottenPassword(e) {
     e.preventDefault();
 
     if (form.password.length < 6) {
-      showToast("Choisis un mot de passe de 6 caractères minimum.");
+      showToast("Choisissez un mot de passe de 6 caractères minimum.");
       return;
     }
 
@@ -1866,7 +2271,7 @@ if (missingProfileContact) {
     const { data: sessionData } = await supabase.auth.getSession();
 
     if (!sessionData.session) {
-      showToast("Tu dois d'abord te connecter avec ton compte admin.");
+      showToast("Vous devez d'abord vous connecter avec votre compte admin.");
       setScreen("login");
       return;
     }
@@ -1924,27 +2329,37 @@ const profile = profiles[0];
     await loadAdminReminders();
     await loadAdminActionLogs();
     await loadAnnouncementHistory();
+    await loadOccasionalSaleReservations();
     await loadTrafficEvents();
+    await loadEggProductionLogs();
     setScreen("admin");
   }
 
 async function placeOrder() {
+  if (isPlacingOrder) {
+    showToast("Votre commande est deja en cours d'enregistrement.");
+    return;
+  }
+
   if (!isLogged || selectedCartItems.length === 0 || !deliveryDate || !currentUser) {
-    showToast("Connecte-toi, choisis des produits et une date.");
+    showToast("Connectez-vous, choisissez des produits et une date.");
     return;
   }
 
   if (!canOrderEggs && !isAdmin) {
-    showToast("La commande d'œufs est réservée aux clients fidèles. Demande l'accès à la ferme.");
+    showToast("La commande d'œufs est réservée aux clients fidèles. Demandez l'accès à la ferme.");
     return;
   }
 
+  setIsPlacingOrder(true);
+
+  try {
   const selectedDeliverySlot = availableDeliverySlots.find(
     (slot) => slot.delivery_date === deliveryDate && slot.active !== false
   );
 
   if (!selectedDeliverySlot) {
-    showToast("Choisis une date de livraison disponible.");
+    showToast("Choisissez une date de livraison disponible.");
     return;
   }
 
@@ -1961,7 +2376,7 @@ async function placeOrder() {
     }
 
     if ((count || 0) >= Number(selectedDeliverySlot.max_orders)) {
-      showToast("Ce créneau est complet. Choisis une autre date de livraison.");
+      showToast("Ce créneau est complet. Choisissez une autre date de livraison.");
       await loadDeliverySlots();
       return;
     }
@@ -1984,6 +2399,23 @@ async function placeOrder() {
     price: item.price,
     size_eggs: item.size_eggs || 0,
   }));
+  const duplicateSignature = getOrderDuplicateSignatureFromItems(orderItems);
+  const duplicateOrder = myOrders.find(
+    (order) =>
+      normalizeOrderStatus(order.status) !== "Annulée" &&
+      order.delivery_date === deliveryDate &&
+      getOrderDuplicateSignature(order) === duplicateSignature
+  );
+
+  if (duplicateOrder) {
+    showToast(
+      `Une commande identique existe déjà pour le ${formatDeliveryDate(deliveryDate)} : ${getOrderSummary(duplicateOrder)}.`,
+      "error"
+    );
+    setScreen("myOrders");
+    return;
+  }
+
   const baseOrder = {
     user_id: currentUser.id,
     client_email: currentUser.email,
@@ -2017,15 +2449,15 @@ async function placeOrder() {
     const message = String(error.message || "");
 
     if (message.includes("delivery_slot_full")) {
-      showToast("Ce créneau est complet. Choisis une autre date de livraison.");
+      showToast("Ce créneau est complet. Choisissez une autre date de livraison.");
     } else if (message.includes("delivery_slot_closed") || message.includes("delivery_slot_unavailable")) {
-      showToast("Choisis une date de livraison disponible.");
+      showToast("Choisissez une date de livraison disponible.");
     } else if (message.includes("stock_insufficient")) {
       showToast("Stock insuffisant.");
     } else if (message.includes("stock_not_found")) {
       showToast("Impossible de trouver le stock.");
     } else if (message.includes("egg_order_access_denied")) {
-      showToast("La commande d'œufs est réservée aux clients fidèles. Demande l'accès à la ferme.");
+      showToast("La commande d'œufs est réservée aux clients fidèles. Demandez l'accès à la ferme.");
     } else {
       showToast("Erreur commande : " + error.message);
     }
@@ -2055,6 +2487,9 @@ async function placeOrder() {
   setScreen("confirmation");
 
   showToast("Commande enregistrée !");
+  } finally {
+    setIsPlacingOrder(false);
+  }
 }
 
   async function changeStatus(id, status) {
@@ -2143,6 +2578,8 @@ const loadOrders = useCallback(async () => {
     status: normalizeOrderStatus(o.status),
     date: o.delivery_date,
     archived_at: o.archived_at || null,
+    created_at: o.created_at || null,
+    updated_at: o.updated_at || null,
   }));
 
   setOrders(formattedOrders);
@@ -2260,11 +2697,16 @@ const loadOrders = useCallback(async () => {
   }
 
 async function loadCustomerProfiles() {
-  const { data, error } = await supabase.rpc("list_customer_profiles");
+  let { data, error } = await supabase.rpc("list_customer_profiles_v2");
+
+  if (error) {
+    const fallback = await supabase.rpc("list_customer_profiles");
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     console.warn("Liste clients indisponible.", error.message);
-    setCustomerProfiles([]);
     return;
   }
 
@@ -2372,19 +2814,148 @@ async function logAdminAction({ actionType, title, targetType = "", targetId = n
   await loadAdminActionLogs();
 }
 
+async function validateAllCustomerAddresses() {
+  if (addressValidationRunning) return;
+
+  const profilesToCheck = customerProfiles.filter((profile) => !profile.is_admin);
+  setAddressValidationRunning(true);
+  setAddressValidationProgress({ current: 0, total: profilesToCheck.length });
+  let exactCount = 0;
+  let suggestionCount = 0;
+  let reviewCount = 0;
+
+  for (let index = 0; index < profilesToCheck.length; index += 1) {
+    const profile = profilesToCheck[index];
+    const currentAddress = String(profile.delivery_address || "").trim();
+    let status = "missing";
+    let suggestion = "";
+    let score = 0;
+
+    if (currentAddress) {
+      try {
+        const response = await fetch(
+          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(currentAddress)}&limit=1`
+        );
+        const result = response.ok ? await response.json() : null;
+        const feature = result?.features?.[0];
+        suggestion = String(feature?.properties?.label || "").trim();
+        score = Number(feature?.properties?.score || 0);
+
+        if (!suggestion || score < 0.5) {
+          status = "review";
+        } else if (normalizeAddressForComparison(currentAddress) === normalizeAddressForComparison(suggestion)) {
+          status = "exact";
+        } else {
+          status = "suggestion";
+        }
+      } catch (error) {
+        console.warn(`Adresse non vérifiée pour ${profile.email || profile.id}.`, error);
+        status = "review";
+      }
+    }
+
+    const { error } = await supabase.rpc("save_customer_address_validation", {
+      p_profile_id: profile.id,
+      p_status: status,
+      p_suggestion: suggestion,
+      p_score: score,
+    });
+
+    if (error) {
+      console.warn("Résultat de vérification non enregistré.", error.message);
+      reviewCount += 1;
+    } else if (status === "exact") {
+      exactCount += 1;
+    } else if (status === "suggestion") {
+      suggestionCount += 1;
+    } else {
+      reviewCount += 1;
+    }
+
+    setAddressValidationProgress({ current: index + 1, total: profilesToCheck.length });
+  }
+
+  await loadCustomerProfiles();
+  setAddressValidationRunning(false);
+  showToast(`${exactCount} adresse${exactCount > 1 ? "s" : ""} exacte${exactCount > 1 ? "s" : ""}, ${suggestionCount} correction${suggestionCount > 1 ? "s" : ""} proposée${suggestionCount > 1 ? "s" : ""}, ${reviewCount} à vérifier.`);
+}
+
+async function acceptCustomerAddressSuggestion(profile) {
+  const { error } = await supabase.rpc("accept_customer_address_suggestion", {
+    p_profile_id: profile.id,
+  });
+
+  if (error) {
+    showToast("Impossible d'appliquer cette adresse : " + error.message);
+    return;
+  }
+
+  await loadCustomerProfiles();
+  showToast("Adresse corrigée. L'ancienne valeur a été conservée dans l'historique.");
+}
+
+async function markAdminNotificationSeen(notificationId) {
+  if (!notificationId) {
+    return;
+  }
+
+  const seenAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("admin_action_logs")
+    .update({ seen_at: seenAt })
+    .eq("id", notificationId);
+
+  if (error) {
+    showToast("Impossible de marquer la notification comme vue : " + error.message);
+    return;
+  }
+
+  setAdminActionLogs((logs) =>
+    logs.map((log) => (log.id === notificationId ? { ...log, seen_at: seenAt } : log))
+  );
+}
+
+async function markAllAdminNotificationsSeen() {
+  const unreadIds = adminActionLogs
+    .filter((log) => String(log.action_type || "").startsWith("notification_") && !log.seen_at)
+    .map((log) => log.id);
+
+  if (unreadIds.length === 0) {
+    showToast("Aucune notification non vue.");
+    return;
+  }
+
+  const seenAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("admin_action_logs")
+    .update({ seen_at: seenAt })
+    .in("id", unreadIds);
+
+  if (error) {
+    showToast("Impossible de marquer les notifications comme vues : " + error.message);
+    return;
+  }
+
+  setAdminActionLogs((logs) =>
+    logs.map((log) => (unreadIds.includes(log.id) ? { ...log, seen_at: seenAt } : log))
+  );
+  showToast("Notifications marquées comme vues.");
+}
+
 async function saveAdminReminder(event) {
   event.preventDefault();
 
   const cleanTitle = adminReminderForm.title.trim();
+  const cleanDueDate = adminReminderForm.dueDate || todayIso;
 
-  if (!cleanTitle || !adminReminderForm.dueDate) {
-    showToast("Renseigne un rappel et une date.");
+  if (!cleanTitle || !cleanDueDate) {
+    showToast("Renseignez un rappel et une date.");
     return;
   }
 
   const { error } = await supabase.from("admin_reminders").insert({
     title: cleanTitle,
-    due_date: adminReminderForm.dueDate,
+    due_date: cleanDueDate,
     profile_id: adminReminderForm.profileId || null,
     priority: adminReminderForm.priority,
     notes: adminReminderForm.notes.trim(),
@@ -2393,13 +2964,34 @@ async function saveAdminReminder(event) {
   });
 
   if (error) {
-    showToast("Impossible d'enregistrer le rappel : " + error.message);
+    const message = String(error.message || "");
+
+    if (message.includes("admin_reminders")) {
+      showToast("Impossible d'enregistrer le rappel : appliquez la migration Supabase des rappels internes.");
+    } else if (message.toLowerCase().includes("row level security") || message.includes("permission denied")) {
+      showToast("Impossible d'enregistrer le rappel : Supabase ne reconnaît pas ce compte comme admin.");
+    } else {
+      showToast("Impossible d'enregistrer le rappel : " + error.message);
+    }
     return;
   }
 
   setAdminReminderForm(emptyAdminReminderForm);
   await loadAdminReminders();
   showToast("Rappel interne ajouté.");
+}
+
+function prepareClientReminder(profile) {
+  setAdminReminderForm({
+    ...emptyAdminReminderForm,
+    profileId: profile.id,
+    dueDate: todayIso,
+    title: `Rappeler ${profile.full_name || profile.email || "ce client"}`,
+  });
+  setAdminView("clients");
+  window.setTimeout(() => {
+    document.getElementById("admin-reminder-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 50);
 }
 
 async function updateAdminReminder(id, changes) {
@@ -2428,7 +3020,9 @@ async function submitContactMessage(e) {
     return;
   }
 
+  const contactMessageId = crypto.randomUUID();
   const { error } = await supabase.from("contact_messages").insert({
+    id: contactMessageId,
     user_id: currentUser?.id || null,
     full_name: cleanName,
     email: cleanEmail,
@@ -2444,7 +3038,12 @@ async function submitContactMessage(e) {
   }
 
   setContactForm(emptyContactForm);
-  showToast("Message envoyé. Nous vous répondrons dès que possible.");
+  const contactConfirmationSent = await handleContactMessageConfirmation(contactMessageId);
+  showToast(
+    contactConfirmationSent
+      ? "Message envoyé. Un email de confirmation vient de vous être envoyé."
+      : "Message envoyé. La confirmation email n'a pas pu partir, mais votre demande est bien enregistrée."
+  );
   setScreen("home");
 }
 
@@ -2501,12 +3100,12 @@ async function sendBroadcastAnnouncement(event) {
   const cleanMessage = announcementForm.message.trim();
 
   if (!cleanTitle || !cleanMessage) {
-    showToast("Renseigne un titre et un message pour l'annonce.");
+    showToast("Renseignez un titre et un message pour l'annonce.");
     return;
   }
 
   if (!announcementForm.sendPush && !announcementForm.sendEmail) {
-    showToast("Choisis au moins un canal : push ou email.");
+    showToast("Choisissez au moins un canal : push ou email.");
     return;
   }
 
@@ -2579,7 +3178,7 @@ async function sendBroadcastAnnouncement(event) {
     showToast(
       "Annonce non envoyée : " +
         (error.message || "erreur inconnue") +
-        "\n\nVérifie que la fonction Supabase send-broadcast-announcement est bien déployée et que les secrets email/push sont renseignés."
+        "\n\nVérifiez que la fonction Supabase send-broadcast-announcement est bien déployée et que les secrets email/push sont renseignés."
     );
     const { error: historyError } = await supabase.from("broadcast_announcements").insert({
       title: cleanTitle,
@@ -2643,7 +3242,7 @@ async function copyMessageTemplate(template) {
     await navigator.clipboard.writeText(text);
     showToast("Modèle copié.");
   } catch {
-    showToast("Impossible de copier automatiquement. Sélectionne le texte du modèle.");
+    showToast("Impossible de copier automatiquement. Sélectionnez le texte du modèle.");
   }
 }
 
@@ -2681,6 +3280,15 @@ function getPreparedMessage(kind, item) {
     return {
       subject: "Réservation ferme pédagogique confirmée",
       body: `Bonjour ${item.client_name || ""},\n\nVotre réservation pour "${item.activity_type}" est confirmée pour le ${formatDeliveryDate(item.booking_date)}.\n\nMerci de nous prévenir en cas d'empêchement.\n\nÀ bientôt,\n${publicFarmName}`,
+      email: item.client_email,
+      phone: item.phone,
+    };
+  }
+
+  if (kind === "education-reminder") {
+    return {
+      subject: "Rappel avant votre activité à la ferme",
+      body: `Bonjour ${item.client_name || ""},\n\nPetit rappel pour votre activité "${item.activity_type}" prévue le ${formatDeliveryDate(item.booking_date)}.\n\nNous avons hâte de vous accueillir à la ferme.\n\nÀ bientôt,\n${publicFarmName}`,
       email: item.client_email,
       phone: item.phone,
     };
@@ -2892,6 +3500,102 @@ function openPreparedMessage(kind, item, channel) {
   window.open(`https://mail.google.com/mail/?${params.toString()}`, "_blank", "noopener,noreferrer");
 }
 
+function openClientDirectMessage(profile, channel) {
+  const clientName = profile.full_name || "";
+  const subject = "Message des Poulettes du Marais";
+  const body = [
+    `Bonjour ${clientName},`,
+    "",
+    "",
+    "Bien cordialement,",
+    publicFarmName,
+  ].join("\n");
+
+  if (channel === "whatsapp") {
+    const phone = getWhatsappPhoneNumber(profile.phone);
+
+    if (!phone) {
+      showToast("Aucun tÃ©lÃ©phone disponible pour WhatsApp.");
+      return;
+    }
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(body)}`, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const email = String(profile.email || "").trim();
+
+  if (!email || email.includes("@les-poulettes.local")) {
+    showToast("Aucun email disponible pour ce client.");
+    return;
+  }
+
+  const params = new URLSearchParams({
+    view: "cm",
+    fs: "1",
+    to: email,
+    su: subject,
+    body,
+  });
+
+  window.open(`https://mail.google.com/mail/?${params.toString()}`, "_blank", "noopener,noreferrer");
+}
+
+function getPreparedMessageSelectionKey(scope, item) {
+  return `${scope}-${item?.id || item?.client_email || item?.email || "message"}`;
+}
+
+function AdminPreparedMessageActions({ scope, item, options }) {
+  const selectionKey = getPreparedMessageSelectionKey(scope, item);
+  const selectedKind = preparedMessageKinds[selectionKey] || options[0]?.value || "";
+  const selectedOption = options.find((option) => option.value === selectedKind) || options[0];
+
+  if (!selectedOption) {
+    return null;
+  }
+
+  return (
+    <div className="admin-message-actions">
+      <div className="admin-message-actions__title">
+        <MessageSquareText size={16} />
+        <strong>Envoyer un message</strong>
+      </div>
+      <label>
+        <span>Modèle</span>
+        <select
+          value={selectedOption.value}
+          onChange={(e) =>
+            setPreparedMessageKinds((current) => ({
+              ...current,
+              [selectionKey]: e.target.value,
+            }))
+          }
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="admin-message-actions__buttons">
+        <button type="button" className="admin-message-actions__whatsapp" onClick={() => openPreparedMessage(selectedOption.value, item, "whatsapp")}>
+          WhatsApp
+        </button>
+        <button type="button" onClick={() => openPreparedMessage(selectedOption.value, item, "sms")}>
+          SMS
+        </button>
+        <button type="button" onClick={() => openPreparedMessage(selectedOption.value, item, "email")}>
+          Email
+        </button>
+        <button type="button" onClick={() => copyPreparedMessage(selectedOption.value, item)}>
+          Copier
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function addCustomPhotoToLibrary() {
   const normalizedImageUrl = normalizeImageUrl(customPhotoInput);
 
@@ -2927,6 +3631,144 @@ async function saveCustomPhotoLibrary(e) {
   setCustomPhotoLibrary(payload);
   setCustomPhotoLibraryForm(payload);
   showToast("Bibliothèque photos enregistrée.");
+}
+
+function updateOccasionalSaleItem(itemId, changes) {
+  setOccasionalSalesForm((current) => ({
+    ...current,
+    items: (current.items || DEFAULT_OCCASIONAL_SALES_CONTENT.items).map((item) =>
+      item.id === itemId ? { ...item, ...changes } : item
+    ),
+  }));
+}
+
+async function saveOccasionalSalesContent(e) {
+  e.preventDefault();
+
+  const payload = {
+    ...occasionalSalesForm,
+    enabled: occasionalSalesForm.enabled === true,
+    image_url: normalizeImageUrl(occasionalSalesForm.image_url),
+    notice_text: String(occasionalSalesForm.notice_text || "").trim(),
+    items: (occasionalSalesForm.items || []).map((item) => ({
+      ...item,
+      name: String(item.name || "").trim(),
+      description: String(item.description || "").trim(),
+      price: String(item.price || "").trim(),
+      unit_label: String(item.unit_label || "").trim(),
+      available_quantity: String(item.available_quantity || "").trim(),
+      image_url: normalizeImageUrl(item.image_url),
+      active: item.active !== false,
+    })),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("site_settings")
+    .upsert({ key: "occasional_sales", value: payload }, { onConflict: "key" });
+
+  if (error) {
+    showToast("Impossible d'enregistrer les ventes ponctuelles : " + error.message);
+    return;
+  }
+
+  setOccasionalSalesContent(payload);
+  setOccasionalSalesForm(payload);
+  showToast("Ventes ponctuelles enregistrées.");
+}
+
+async function submitOccasionalSaleReservation(e) {
+  e.preventDefault();
+
+  const selectedItem = activeOccasionalSaleItems.find((item) => item.id === occasionalSaleReservationForm.itemId);
+  const cleanName = occasionalSaleReservationForm.fullName.trim();
+  const cleanEmail = occasionalSaleReservationForm.email.trim();
+  const cleanPhone = occasionalSaleReservationForm.phone.trim();
+  const quantity = Math.max(1, Number(occasionalSaleReservationForm.quantity || 1));
+
+  if (!selectedItem) {
+    showToast("Choisissez une vente disponible.");
+    return;
+  }
+
+  if (isOccasionalSaleItemComplete(selectedItem)) {
+    showToast("Cette vente est complète.");
+    return;
+  }
+
+  if (!cleanName || !cleanEmail || !cleanPhone) {
+    showToast("Renseignez votre nom, votre téléphone et votre email.");
+    return;
+  }
+
+  const { data: reservationResult, error } = await supabase.rpc("create_occasional_sale_reservation", {
+    p_item_id: selectedItem.id,
+    p_quantity: quantity,
+    p_client_name: cleanName,
+    p_client_email: cleanEmail,
+    p_phone: cleanPhone,
+    p_notes: occasionalSaleReservationForm.notes.trim(),
+  });
+
+  if (error) {
+    const message = String(error.message || "");
+
+    if (message.includes("create_occasional_sale_reservation")) {
+      showToast("Réservation impossible : appliquez la migration Supabase du stock des ventes ponctuelles.");
+    } else if (message.includes("occasional_sale_sold_out")) {
+      showToast("Cette vente est complète.");
+      await loadOccasionalSalesContent();
+    } else if (message.includes("occasional_sale_not_enough_stock")) {
+      showToast("Stock insuffisant pour cette quantité.");
+      await loadOccasionalSalesContent();
+    } else {
+      showToast("Impossible d'envoyer la réservation : " + error.message);
+    }
+    return;
+  }
+
+  const updatedContent = reservationResult?.updated_content;
+
+  if (updatedContent) {
+    const normalizedContent = {
+      ...DEFAULT_OCCASIONAL_SALES_CONTENT,
+      ...updatedContent,
+      image_url: normalizeImageUrl(updatedContent.image_url),
+      items: (updatedContent.items || []).map((item) => ({
+        ...item,
+        image_url: normalizeImageUrl(item.image_url),
+        active: item.active !== false,
+      })),
+    };
+    setOccasionalSalesContent(normalizedContent);
+    setOccasionalSalesForm(normalizedContent);
+  } else {
+    await loadOccasionalSalesContent();
+  }
+
+  setOccasionalSaleReservationForm({
+    ...emptyOccasionalSaleReservationForm,
+    itemId: activeOccasionalSaleItems[0]?.id || "reform-hens",
+  });
+  if (currentUser?.email && currentUser.email.trim().toLowerCase() === cleanEmail.toLowerCase()) {
+    await loadMyOccasionalSaleReservations(currentUser.email);
+  }
+  await notifyAdminsAboutOccasionalSaleReservation(reservationResult?.reservation_id);
+  showToast("Réservation envoyée. Nous vous recontacterons rapidement.");
+}
+
+async function updateOccasionalSaleReservation(id, changes) {
+  const { error } = await supabase
+    .from("occasional_sale_reservations")
+    .update({ ...changes, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) {
+    showToast("Impossible de modifier cette réservation : " + error.message);
+    return;
+  }
+
+  await loadOccasionalSaleReservations();
 }
 
 async function saveHomeNewsItems(nextItems, successMessage = "Actualités enregistrées.") {
@@ -2973,6 +3815,7 @@ async function saveHomeNewsItem(e) {
     ...homeNewsForm,
     id: homeNewsForm.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     image_url: normalizeImageUrl(homeNewsForm.image_url),
+    gallery_images: parseGalleryImages(homeNewsForm.gallery_images),
     published_at: homeNewsForm.published_at || getLocalIsoDate(),
   };
   const currentItems = homeNewsContent.items || [];
@@ -2992,6 +3835,7 @@ function editHomeNewsItem(item) {
     ...emptyHomeNewsForm,
     ...item,
     image_url: normalizeImageUrl(item.image_url),
+    gallery_images: parseGalleryImages(item.gallery_images).join("\n"),
     published_at: item.published_at || getLocalIsoDate(),
   });
 }
@@ -3195,10 +4039,16 @@ function removeEducationChild(index) {
 }
 
 async function loadKennelBookings() {
-  const { data, error } = await supabase
-    .from("kennel_bookings")
-    .select("*, dog:dogs(*)")
-    .order("start_date", { ascending: true });
+  const [{ data, error }, { data: contracts, error: contractsError }] = await Promise.all([
+    supabase
+      .from("kennel_bookings")
+      .select("*, dog:dogs(*)")
+      .order("start_date", { ascending: true }),
+    supabase
+      .from("kennel_contracts")
+      .select("*")
+      .order("created_at", { ascending: false }),
+  ]);
 
   if (error) {
     console.warn("Réservations pension canine indisponibles.", error.message);
@@ -3207,6 +4057,42 @@ async function loadKennelBookings() {
   }
 
   setKennelBookings(data || []);
+
+  if (contractsError) {
+    console.warn("Contrats pension indisponibles.", contractsError.message);
+    setKennelContracts([]);
+  } else {
+    setKennelContracts(contracts || []);
+  }
+}
+
+async function signKennelContract(booking, signedContract) {
+  if (!currentUser?.id || !booking?.id) {
+    showToast("Impossible d'identifier le contrat à signer.");
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("kennel_contracts")
+    .insert({
+      booking_id: booking.id,
+      user_id: currentUser.id,
+      snapshot: signedContract.snapshot,
+      signer_name: signedContract.signerName || booking.client_name || name,
+      signature_data: signedContract.signatureData,
+      signed_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    showToast("Impossible d'enregistrer la signature : " + error.message);
+    return;
+  }
+
+  setKennelContracts((contracts) => [data, ...contracts.filter((item) => item.booking_id !== booking.id)]);
+  setSelectedContractBooking((current) => current ? { ...current } : current);
+  showToast("Contrat signé et enregistré. Vous pouvez maintenant l'imprimer ou le conserver en PDF.");
 }
 
 const loadKennelAvailability = useCallback(async (monthValue = clientKennelCalendarMonth) => {
@@ -3250,11 +4136,11 @@ function getBlockedKennelDate(date) {
 }
 
 function getBlockedKennelNights(startDate, endDate) {
-  if (!startDate || !endDate || endDate <= startDate) {
+  if (!startDate || !endDate || endDate < startDate) {
     return [];
   }
 
-  return getKennelNights(startDate, endDate)
+  return getKennelCalendarStayDates(startDate, endDate)
     .map((date) => getBlockedKennelDate(date))
     .filter(Boolean);
 }
@@ -3263,7 +4149,7 @@ async function saveKennelBlockedDate(event) {
   event.preventDefault();
 
   if (!kennelBlockedDateForm.blocked_date) {
-    showToast("Choisis une date à fermer.");
+    showToast("Choisissez une date à fermer.");
     return;
   }
 
@@ -3476,13 +4362,13 @@ async function updateKennelBooking(id, changes) {
     .update({ ...changes, updated_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (error) {
-    if (String(error.message || "").includes("kennel_night_full")) {
-      showToast("La pension est complète sur au moins une nuit demandée.");
+    if (error) {
+      if (String(error.message || "").includes("kennel_night_full")) {
+      showToast("La pension est complète sur au moins une journée demandée.");
     } else if (String(error.message || "").includes("kennel_night_closed")) {
-      showToast("La pension est fermée sur au moins une nuit demandée.");
+      showToast("La pension est fermée sur au moins une journée demandée.");
     } else if (String(error.message || "").includes("kennel_invalid_dates")) {
-      showToast("La date de départ doit être après la date d'arrivée.");
+      showToast("La date de départ ne peut pas être avant la date d'arrivée.");
     } else {
       showToast("Impossible de modifier la réservation pension : " + error.message);
     }
@@ -3490,9 +4376,10 @@ async function updateKennelBooking(id, changes) {
   }
 
   const booking = kennelBookings.find((item) => item.id === id);
+  const isPaymentReceivedUpdate = changes.payment_received === true;
   await logAdminAction({
     actionType: "kennel_booking_update",
-    title: "Séjour pension modifié",
+    title: isPaymentReceivedUpdate ? "Paiement pension reçu" : "Séjour pension modifié",
     targetType: "Séjour pension",
     targetId: id,
     targetLabel: booking?.dog?.name || booking?.client_name || "Séjour pension",
@@ -3533,7 +4420,7 @@ async function createAdminKennelBooking(event) {
   event.preventDefault();
 
   if (!currentUser || !isAdmin) {
-    showToast("Connecte-toi avec le compte admin pour ajouter une réservation.");
+    showToast("Connectez-vous avec le compte admin pour ajouter une réservation.");
     return;
   }
 
@@ -3544,12 +4431,12 @@ async function createAdminKennelBooking(event) {
   const cleanEndDate = adminKennelBookingForm.endDate;
 
   if (!cleanClientName || !cleanClientPhone || !cleanDogName || !cleanStartDate || !cleanEndDate) {
-    showToast("Renseigne au minimum le client, le téléphone, le chien et les dates du séjour.");
+    showToast("Renseignez au minimum le client, le téléphone, le chien et les dates du séjour.");
     return;
   }
 
-  if (cleanEndDate <= cleanStartDate) {
-    showToast("La date de départ doit être après la date d'arrivée.");
+  if (cleanEndDate < cleanStartDate) {
+    showToast("La date de départ ne peut pas être avant la date d'arrivée.");
     return;
   }
 
@@ -3557,6 +4444,11 @@ async function createAdminKennelBooking(event) {
 
   if (blockedNights.length > 0) {
     showToast(`La pension est fermée sur cette période, notamment le ${formatDeliveryDate(blockedNights[0].blocked_date)}.`);
+    return;
+  }
+
+  if (!adminKennelBookingForm.dogNotMicrochipped && !adminKennelBookingForm.dogMicrochipNumber.trim()) {
+    showToast("Indiquez le numero de puce du chien ou cochez chien non puce.");
     return;
   }
 
@@ -3569,6 +4461,8 @@ async function createAdminKennelBooking(event) {
       breed: adminKennelBookingForm.dogBreed.trim(),
       birth_year: adminKennelBookingForm.dogBirthYear ? Number(adminKennelBookingForm.dogBirthYear) : null,
       sex: adminKennelBookingForm.dogSex,
+      microchip_number: adminKennelBookingForm.dogNotMicrochipped ? "" : adminKennelBookingForm.dogMicrochipNumber.trim(),
+      is_microchipped: !adminKennelBookingForm.dogNotMicrochipped,
       vaccines_up_to_date: adminKennelBookingForm.vaccinesUpToDate,
       sterilized: adminKennelBookingForm.sterilized,
       notes: adminKennelBookingForm.notes.trim(),
@@ -3607,12 +4501,22 @@ async function createAdminKennelBooking(event) {
   });
 
   if (error) {
+    const { error: cleanupError } = await supabase
+      .from("dogs")
+      .delete()
+      .eq("id", dog.id)
+      .eq("user_id", currentUser.id);
+
+    if (cleanupError) {
+      console.warn("Fiche chien temporaire admin non supprimée.", cleanupError.message);
+    }
+
     if (String(error.message || "").includes("kennel_night_full")) {
-      showToast("La pension est complète sur au moins une nuit demandée.");
+      showToast("La pension est complète sur au moins une journée demandée.");
     } else if (String(error.message || "").includes("kennel_night_closed")) {
-      showToast("La pension est fermée sur au moins une nuit demandée.");
+      showToast("La pension est fermée sur au moins une journée demandée.");
     } else if (String(error.message || "").includes("kennel_invalid_dates")) {
-      showToast("La date de départ doit être après la date d'arrivée.");
+      showToast("La date de départ ne peut pas être avant la date d'arrivée.");
     } else {
       showToast("Impossible d'ajouter la réservation pension : " + error.message);
     }
@@ -3626,7 +4530,7 @@ async function createAdminKennelBooking(event) {
 
   async function loadMyOrders(userId) {
     if (!userId) {
-      showToast("Utilisateur introuvable. Reconnecte-toi.");
+      showToast("Utilisateur introuvable. Reconnectez-vous.");
       return;
     }
 
@@ -3647,13 +4551,90 @@ async function createAdminKennelBooking(event) {
     })));
   }
 
+  async function loadMyOccasionalSaleReservations(email) {
+    const cleanEmail = String(email || "").trim().toLowerCase();
+
+    if (!cleanEmail) {
+      setMyOccasionalSaleReservations([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("occasional_sale_reservations")
+      .select("*")
+      .ilike("client_email", cleanEmail)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Demandes ventes ponctuelles client indisponibles.", error.message);
+      setMyOccasionalSaleReservations([]);
+      return;
+    }
+
+    setMyOccasionalSaleReservations(data || []);
+  }
+
+  async function cancelMyOrder(order) {
+    if (!currentUser) {
+      showToast("Vous devez être connecté.");
+      setScreen("login");
+      return;
+    }
+
+    const cancelInfo = getClientOrderCancelInfo(order);
+
+    if (!cancelInfo.canCancel) {
+      showToast(cancelInfo.reason || "Cette commande ne peut plus être annulée.");
+      await loadMyOrders(currentUser.id);
+      return;
+    }
+
+    const confirmed = await requestConfirm({
+      title: "Annuler cette commande ?",
+      message:
+        "La commande passera en annulée et les œufs seront remis dans le stock.\n\n" +
+        "Cette action est possible uniquement dans les 6 heures après la commande.",
+      confirmLabel: "Annuler la commande",
+      cancelLabel: "Garder la commande",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    const { error } = await supabase.rpc("cancel_own_order", {
+      p_order_id: String(order.id),
+    });
+
+    if (error) {
+      const message = String(error.message || "");
+
+      if (message.includes("cancel_window_expired")) {
+        showToast("Le délai d'annulation de 6h est dépassé.");
+      } else if (message.includes("order_already_in_progress")) {
+        showToast("Cette commande est déjà en préparation avancée. Contactez la ferme si besoin.");
+      } else {
+        showToast("Impossible d'annuler la commande : " + error.message);
+      }
+
+      await loadMyOrders(currentUser.id);
+      return;
+    }
+
+    await Promise.all([loadMyOrders(currentUser.id), loadStock()]);
+    await notifyClientAboutOrderCancellation(order.id);
+    await notifyAdminsAboutOrderCancellation(order.id);
+    showToast("Commande annulée. Le stock a été remis à jour.");
+  }
+
   async function goToMyOrders() {
     setScreen("myOrders");
 
     const { data: sessionData } = await supabase.auth.getSession();
 
     if (!sessionData.session) {
-      showToast("Tu dois être connecté.");
+      showToast("Vous devez être connecté.");
       setScreen("login");
       return;
     }
@@ -3662,6 +4643,7 @@ async function createAdminKennelBooking(event) {
     setCurrentUser(user);
     await Promise.all([
       loadMyOrders(user.id),
+      loadMyOccasionalSaleReservations(user.email),
       loadCustomerProfiles(),
       loadEducationBookings(),
       loadKennelBookings(),
@@ -3674,7 +4656,7 @@ async function createAdminKennelBooking(event) {
     const { data: sessionData } = await supabase.auth.getSession();
 
     if (!sessionData.session) {
-      showToast("Tu dois être connecté.");
+      showToast("Vous devez être connecté.");
       setScreen("login");
       return;
     }
@@ -3682,6 +4664,8 @@ async function createAdminKennelBooking(event) {
     const user = sessionData.session.user;
     setCurrentUser(user);
     await Promise.all([
+      loadMyOrders(user.id),
+      loadMyOccasionalSaleReservations(user.email),
       loadCustomerProfiles(),
       loadEducationBookings(),
       loadKennelBookings(),
@@ -3692,7 +4676,7 @@ async function createAdminKennelBooking(event) {
     const { data: sessionData } = await supabase.auth.getSession();
 
     if (!sessionData.session) {
-      showToast("Tu dois être connecté.");
+      showToast("Vous devez être connecté.");
       setScreen("login");
       return;
     }
@@ -3729,7 +4713,7 @@ async function createAdminKennelBooking(event) {
     e.preventDefault();
 
     if (!currentUser) {
-      showToast("Tu dois être connecté.");
+      showToast("Vous devez être connecté.");
       setScreen("login");
       return;
     }
@@ -3740,6 +4724,11 @@ async function createAdminKennelBooking(event) {
 
     if (!cleanName || !cleanPhone || !cleanDeliveryAddress) {
       showToast("Merci de renseigner le nom, le téléphone et l'adresse de livraison.");
+      return;
+    }
+
+    if (cleanDeliveryAddress !== deliveryAddress && addressLookup.profile.selected !== cleanDeliveryAddress && !addressLookup.profile.manual) {
+      showToast("Merci de choisir une adresse dans la liste proposée, ou cliquez sur “Je ne trouve pas mon adresse”.");
       return;
     }
 
@@ -3754,7 +4743,7 @@ async function createAdminKennelBooking(event) {
 
     if (error) {
       if (String(error.message || "").includes("delivery_address")) {
-        showToast("Applique d'abord la migration Supabase de l'adresse client.");
+        showToast("Appliquez d'abord la migration Supabase de l'adresse client.");
         return;
       }
 
@@ -3771,7 +4760,7 @@ async function createAdminKennelBooking(event) {
     event.preventDefault();
 
     if (!currentUser || !isLogged) {
-      showToast("Connecte-toi pour demander une réservation.");
+      showToast("Connectez-vous pour demander une réservation.");
       setScreen("login");
       return;
     }
@@ -3786,12 +4775,12 @@ async function createAdminKennelBooking(event) {
       .filter((child) => child.firstName && Number(child.age) > 0);
 
     if (!activity || !slot) {
-      showToast("Choisis une activité et une date proposée.");
+      showToast("Choisissez une activité et une date proposée.");
       return;
     }
 
     if (children.length === 0 || !educationBookingForm.accompanistName.trim()) {
-      showToast("Renseigne au minimum un enfant et le nom de l'accompagnateur.");
+      showToast("Renseignez au minimum un enfant et le nom de l'accompagnateur.");
       return;
     }
 
@@ -3800,7 +4789,7 @@ async function createAdminKennelBooking(event) {
       return;
     }
 
-    const { error } = await supabase.rpc("create_education_booking", {
+    const { data: educationBookingId, error } = await supabase.rpc("create_education_booking", {
       p_activity_id: activity.id,
       p_date_slot_id: slot.id,
       p_activity_type: activity.name,
@@ -3825,6 +4814,7 @@ async function createAdminKennelBooking(event) {
 
     setEducationBookingForm(emptyEducationBookingForm);
     await loadEducationBookings();
+    await notifyAdminsAboutEducationBooking(educationBookingId);
     showToast("Demande de réservation envoyée. Nous confirmerons le créneau rapidement.");
   }
 
@@ -3832,7 +4822,7 @@ async function createAdminKennelBooking(event) {
     event.preventDefault();
 
     if (!currentUser || !isLogged) {
-      showToast("Connecte-toi pour envoyer une demande d'anniversaire.");
+      showToast("Connectez-vous pour envoyer une demande d'anniversaire.");
       setScreen("login");
       return;
     }
@@ -3847,7 +4837,7 @@ async function createAdminKennelBooking(event) {
     const desiredDate = birthdayBookingForm.desiredDate;
 
     if (!activity || !desiredDate || !childName || childAge <= 0 || guestCount <= 0 || !parentName || !birthdayBookingForm.phone.trim()) {
-      showToast("Renseigne la date souhaitée, l'enfant, l'âge, le nombre d'invités, le parent et le téléphone.");
+      showToast("Renseignez la date souhaitée, l'enfant, l'âge, le nombre d'invités, le parent et le téléphone.");
       return;
     }
 
@@ -3859,7 +4849,7 @@ async function createAdminKennelBooking(event) {
       birthdayBookingForm.notes.trim() ? `Précisions : ${birthdayBookingForm.notes.trim()}` : "",
     ].filter(Boolean).join("\n");
 
-    const { error } = await supabase.from("educational_bookings").insert({
+    const { data: insertedBirthdayBooking, error } = await supabase.from("educational_bookings").insert({
       user_id: currentUser.id,
       activity_id: activity.id,
       date_slot_id: null,
@@ -3873,7 +4863,7 @@ async function createAdminKennelBooking(event) {
       phone: birthdayBookingForm.phone.trim(),
       notes,
       status: "Demandée",
-    });
+    }).select("id").single();
 
     if (error) {
       showToast("Impossible d'envoyer la demande d'anniversaire : " + error.message);
@@ -3882,6 +4872,7 @@ async function createAdminKennelBooking(event) {
 
     setBirthdayBookingForm(emptyBirthdayBookingForm);
     await loadEducationBookings();
+    await notifyAdminsAboutEducationBooking(insertedBirthdayBooking?.id);
     showToast("Demande d'anniversaire envoyée. Nous reviendrons vers vous pour organiser la fête.");
   }
 
@@ -3889,18 +4880,18 @@ async function createAdminKennelBooking(event) {
     event.preventDefault();
 
     if (!currentUser || !isLogged) {
-      showToast("Connecte-toi pour demander une réservation.");
+      showToast("Connectez-vous pour demander une réservation.");
       setScreen("login");
       return;
     }
 
-    if (!kennelBookingForm.startDate || !kennelBookingForm.endDate || !kennelBookingForm.dogName.trim()) {
-      showToast("Indique les dates de séjour et le nom du chien.");
+    if (!kennelBookingForm.startDate || !kennelBookingForm.endDate || !kennelBookingForm.dogName.trim() || !kennelBookingForm.ownerInsurance.trim() || !kennelBookingForm.veterinarianName.trim()) {
+      showToast("Indiquez les dates de séjour, le nom du chien, l'assurance et le vétérinaire habituel.");
       return;
     }
 
-    if (kennelBookingForm.endDate <= kennelBookingForm.startDate) {
-      showToast("La date de départ doit être après la date d'arrivée.");
+    if (kennelBookingForm.endDate < kennelBookingForm.startDate) {
+      showToast("La date de départ ne peut pas être avant la date d'arrivée.");
       return;
     }
 
@@ -3908,6 +4899,16 @@ async function createAdminKennelBooking(event) {
 
     if (blockedNights.length > 0) {
       showToast(`La pension est fermée sur cette période, notamment le ${formatDeliveryDate(blockedNights[0].blocked_date)}.`);
+      return;
+    }
+
+    if (!kennelBookingForm.dogNotMicrochipped && !kennelBookingForm.dogMicrochipNumber.trim()) {
+      showToast("Indiquez le numero de puce du chien ou cochez chien non puce.");
+      return;
+    }
+
+    if (!kennelBookingForm.photoConsent) {
+      showToast("Indiquez si vous autorisez ou refusez l'utilisation des photos et vidéos de votre chien.");
       return;
     }
 
@@ -3920,8 +4921,11 @@ async function createAdminKennelBooking(event) {
         breed: kennelBookingForm.dogBreed.trim(),
         birth_year: kennelBookingForm.dogBirthYear ? Number(kennelBookingForm.dogBirthYear) : null,
         sex: kennelBookingForm.dogSex,
+        microchip_number: kennelBookingForm.dogNotMicrochipped ? "" : kennelBookingForm.dogMicrochipNumber.trim(),
+        is_microchipped: !kennelBookingForm.dogNotMicrochipped,
         vaccines_up_to_date: kennelBookingForm.vaccinesUpToDate,
         sterilized: kennelBookingForm.sterilized,
+        veterinarian_name: kennelBookingForm.veterinarianName.trim(),
         notes: kennelBookingForm.notes.trim(),
       })
       .select("id")
@@ -3932,7 +4936,7 @@ async function createAdminKennelBooking(event) {
       return;
     }
 
-    const { error } = await supabase.from("kennel_bookings").insert({
+    const { data: insertedKennelBooking, error } = await supabase.from("kennel_bookings").insert({
       user_id: currentUser.id,
       dog_id: dog.id,
       start_date: kennelBookingForm.startDate,
@@ -3940,16 +4944,28 @@ async function createAdminKennelBooking(event) {
       client_name: name || currentUser.email,
       client_email: currentUser.email,
       phone: kennelBookingForm.phone.trim(),
+      client_insurance: kennelBookingForm.ownerInsurance.trim(),
+      photo_consent: kennelBookingForm.photoConsent === "yes",
       notes: kennelBookingForm.notes.trim(),
-    });
+    }).select("id").single();
 
     if (error) {
+      const { error: cleanupError } = await supabase
+        .from("dogs")
+        .delete()
+        .eq("id", dog.id)
+        .eq("user_id", currentUser.id);
+
+      if (cleanupError) {
+        console.warn("Fiche chien temporaire non supprimée.", cleanupError.message);
+      }
+
       if (String(error.message || "").includes("kennel_night_full")) {
-        showToast("La pension est complète sur au moins une nuit demandée. Choisis d'autres dates.");
+        showToast("La pension est complète sur au moins une journée demandée. Choisissez d'autres dates.");
       } else if (String(error.message || "").includes("kennel_night_closed")) {
-        showToast("La pension est fermée sur au moins une nuit demandée. Choisis d'autres dates.");
+        showToast("La pension est fermée sur au moins une journée demandée. Choisissez d'autres dates.");
       } else if (String(error.message || "").includes("kennel_invalid_dates")) {
-        showToast("La date de départ doit être après la date d'arrivée.");
+        showToast("La date de départ ne peut pas être avant la date d'arrivée.");
       } else {
         showToast("Impossible d'enregistrer la demande : " + error.message);
       }
@@ -3958,6 +4974,7 @@ async function createAdminKennelBooking(event) {
 
     setKennelBookingForm(emptyKennelBookingForm);
     await loadKennelAvailability(clientKennelCalendarMonth);
+    await notifyAdminsAboutKennelBooking(insertedKennelBooking?.id);
     showToast("Demande de pension envoyée. Nous confirmerons la disponibilité rapidement.");
   }
 
@@ -3986,6 +5003,28 @@ async function createAdminKennelBooking(event) {
       void loadStock();
     }
   }, [screen, loadStock]);
+
+  const loadEggProductionLogs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("egg_production_logs")
+      .select("*")
+      .order("log_date", { ascending: false })
+      .limit(400);
+
+    if (error) {
+      console.warn("Historique de ponte indisponible.", error.message);
+      setEggProductionLogs([]);
+      return;
+    }
+
+    setEggProductionLogs(data || []);
+  }, []);
+
+  useEffect(() => {
+    if (screen === "admin") {
+      void loadEggProductionLogs();
+    }
+  }, [screen, loadEggProductionLogs]);
 
   useEffect(() => {
     if (isStandaloneDisplay || (installBannerWasDismissed && !installWasRequested)) {
@@ -4092,7 +5131,7 @@ async function createAdminKennelBooking(event) {
     }
 
     showToast(
-      "Pour créer l'icône de la synthèse commandes : ouvre cette page dans le navigateur du téléphone, puis utilise le menu Partager / Ajouter à l'écran d'accueil."
+      "Pour créer l'icône de la synthèse commandes : ouvrez cette page dans le navigateur du téléphone, puis utilisez le menu Partager / Ajouter à l'écran d'accueil."
     );
   }
 
@@ -4127,7 +5166,7 @@ async function saveProduct(event) {
       .replace(/(^-|-$)/g, "");
 
   if (!name || !productId || Number.isNaN(price) || price < 0) {
-    showToast("Renseigne au minimum un nom et un prix valide.");
+    showToast("Renseignez au minimum un nom et un prix valide.");
     return;
   }
 
@@ -4146,7 +5185,7 @@ async function saveProduct(event) {
     showToast(
       "Impossible d'enregistrer le produit : " +
         error.message +
-        "\n\nSi la table products n'existe pas encore, applique la migration Supabase products."
+        "\n\nSi la table products n'existe pas encore, appliquez la migration Supabase products."
     );
     return;
   }
@@ -4165,7 +5204,7 @@ async function toggleProductActive(product) {
     showToast(
       "Impossible de modifier ce produit : " +
         error.message +
-        "\n\nSi la table products n'existe pas encore, applique la migration Supabase products."
+        "\n\nSi la table products n'existe pas encore, appliquez la migration Supabase products."
     );
     return;
   }
@@ -4191,7 +5230,7 @@ async function deleteProduct(product) {
     showToast(
       "Impossible de supprimer ce produit : " +
         error.message +
-        "\n\nTu peux utiliser Masquer pour le retirer de la boutique sans le supprimer."
+        "\n\nVous pouvez utiliser Masquer pour le retirer de la boutique sans le supprimer."
     );
     return;
   }
@@ -4207,7 +5246,7 @@ async function saveDeliverySlot(event) {
   event.preventDefault();
 
   if (!deliverySlotForm.delivery_date) {
-    showToast("Choisis une date de livraison.");
+    showToast("Choisissez une date de livraison.");
     return;
   }
 
@@ -4226,7 +5265,7 @@ async function saveDeliverySlot(event) {
     showToast(
       "Impossible d'enregistrer ce créneau : " +
         error.message +
-        "\n\nApplique d'abord la migration Supabase delivery_slots."
+        "\n\nAppliquez d'abord la migration Supabase delivery_slots."
     );
     return;
   }
@@ -4294,7 +5333,7 @@ async function saveEducationActivity(event) {
   const price = Number(educationActivityForm.price || 0);
 
   if (!activityName || Number.isNaN(price) || price < 0) {
-    showToast("Renseigne au minimum un nom et un tarif valide.");
+    showToast("Renseignez au minimum un nom et un tarif valide.");
     return;
   }
 
@@ -4378,7 +5417,7 @@ async function saveEducationDateSlot(event) {
   event.preventDefault();
 
   if (!educationDateForm.activity_id || !educationDateForm.activity_date || Number(educationDateForm.capacity) < 1) {
-    showToast("Choisis une activité, une date et une capacité valide.");
+    showToast("Choisissez une activité, une date et une capacité valide.");
     return;
   }
 
@@ -4457,7 +5496,7 @@ async function saveKennelService(event) {
   const price = Number(kennelServiceForm.price || 0);
 
   if (!serviceName || Number.isNaN(price) || price < 0) {
-    showToast("Renseigne au minimum un nom et un tarif valide.");
+    showToast("Renseignez au minimum un nom et un tarif valide.");
     return;
   }
 
@@ -4527,7 +5566,7 @@ async function deleteKennelService(service) {
 
 async function enableAdminPushNotifications() {
   if (!currentUser || !isAdmin) {
-    showToast("Connecte-toi avec le compte admin pour activer les notifications.");
+    showToast("Connectez-vous avec le compte admin pour activer les notifications.");
     return;
   }
 
@@ -4537,7 +5576,7 @@ async function enableAdminPushNotifications() {
   }
 
   if (!vapidPublicKey) {
-    showToast("Ajoute d'abord VITE_VAPID_PUBLIC_KEY dans la configuration Netlify.");
+    showToast("Ajoutez d'abord VITE_VAPID_PUBLIC_KEY dans la configuration Netlify.");
     return;
   }
 
@@ -4578,7 +5617,7 @@ async function enableAdminPushNotifications() {
       showToast(
         "Impossible d'activer les notifications : " +
           error.message +
-          "\n\nApplique d'abord la migration Supabase admin_push_subscriptions."
+          "\n\nAppliquez d'abord la migration Supabase admin_push_subscriptions."
       );
       setPushStatus("idle");
       return;
@@ -4596,7 +5635,7 @@ async function enableAdminPushNotifications() {
 
 async function enableClientPushNotifications() {
   if (!currentUser) {
-    showToast("Connecte-toi pour activer les notifications de commande.");
+    showToast("Connectez-vous pour activer les notifications de commande.");
     setScreen("login");
     return;
   }
@@ -4607,7 +5646,7 @@ async function enableClientPushNotifications() {
   }
 
   if (!vapidPublicKey) {
-    showToast("Ajoute d'abord VITE_VAPID_PUBLIC_KEY dans la configuration Netlify.");
+    showToast("Ajoutez d'abord VITE_VAPID_PUBLIC_KEY dans la configuration Netlify.");
     return;
   }
 
@@ -4648,7 +5687,7 @@ async function enableClientPushNotifications() {
       showToast(
         "Impossible d'activer les notifications : " +
           error.message +
-          "\n\nApplique d'abord la migration Supabase client_push_subscriptions."
+          "\n\nAppliquez d'abord la migration Supabase client_push_subscriptions."
       );
       setClientPushStatus("idle");
       return;
@@ -4694,9 +5733,168 @@ async function notifyAdminsAboutOrder(order, showResult = false) {
       showToast(
         "Notification non envoyée : " +
           (error.message || "erreur inconnue") +
-          "\n\nVérifie que la fonction Supabase send-admin-push est bien déployée et que les secrets VAPID sont renseignés."
+          "\n\nVérifiez que la fonction Supabase send-admin-push est bien déployée et que les secrets VAPID sont renseignés."
       );
     }
+  }
+}
+
+async function notifyAdminsAboutEducationBooking(educationBookingId, showResult = false) {
+  if (!educationBookingId) {
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke("send-admin-push", {
+      body: { educationBookingId },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (showResult) {
+      showToast(
+        `Test ferme envoyé. Téléphones touchés : ${data?.sent ?? 0}/${data?.total ?? 0}` +
+          (data?.failed ? `\nÉchecs : ${data.failed}` : "") +
+          (data?.expired ? `\nAbonnements expirés nettoyés : ${data.expired}` : "")
+      );
+    }
+  } catch (error) {
+    console.warn("Notification admin réservation ferme non envoyée.", error);
+
+    if (showResult) {
+      showToast(
+        "Notification ferme non envoyée : " +
+          (error.message || "erreur inconnue") +
+          "\n\nVérifiez que la fonction Supabase send-admin-push est bien redéployée."
+      );
+    }
+  }
+}
+
+async function notifyAdminsAboutKennelBooking(kennelBookingId, showResult = false) {
+  if (!kennelBookingId) {
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke("send-admin-push", {
+      body: { kennelBookingId },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (showResult) {
+      showToast(
+        `Test pension envoyé. Téléphones touchés : ${data?.sent ?? 0}/${data?.total ?? 0}` +
+          (data?.failed ? `\nÉchecs : ${data.failed}` : "") +
+          (data?.expired ? `\nAbonnements expirés nettoyés : ${data.expired}` : "")
+      );
+    }
+  } catch (error) {
+    console.warn("Notification admin réservation pension non envoyée.", error);
+
+    if (showResult) {
+      showToast(
+        "Notification pension non envoyée : " +
+          (error.message || "erreur inconnue") +
+          "\n\nVérifiez que la fonction Supabase send-admin-push est bien redéployée."
+      );
+    }
+  }
+}
+
+async function notifyAdminsAboutOccasionalSaleReservation(reservationId, showResult = false) {
+  if (!reservationId) {
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke("send-admin-push", {
+      body: { occasionalSaleReservationId: reservationId },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (showResult) {
+      showToast(
+        `Test vente ponctuelle envoyé. Téléphones touchés : ${data?.sent ?? 0}/${data?.total ?? 0}` +
+          (data?.failed ? `\nÉchecs : ${data.failed}` : "") +
+          (data?.expired ? `\nAbonnements expirés nettoyés : ${data.expired}` : "")
+      );
+    }
+  } catch (error) {
+    console.warn("Notification admin vente ponctuelle non envoyée.", error);
+
+    if (showResult) {
+      showToast(
+        "Notification vente ponctuelle non envoyée : " +
+          (error.message || "erreur inconnue") +
+          "\n\nVérifiez que la fonction Supabase send-admin-push est bien redéployée."
+      );
+    }
+  }
+}
+
+async function notifyClientAboutOrderCancellation(orderId) {
+  if (!orderId) {
+    return;
+  }
+
+  try {
+    const { error } = await supabase.functions.invoke("send-order-cancelled-email", {
+      body: { orderId },
+    });
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.warn("Email annulation commande non envoyé.", error);
+  }
+}
+
+async function notifyAdminsAboutOrderCancellation(orderId) {
+  if (!orderId) {
+    return;
+  }
+
+  try {
+    const { error } = await supabase.functions.invoke("send-admin-push", {
+      body: { orderId, eventType: "order_cancelled" },
+    });
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.warn("Notification admin annulation commande non envoyée.", error);
+  }
+}
+
+async function handleContactMessageConfirmation(contactMessageId) {
+  if (!contactMessageId) {
+    return false;
+  }
+
+  try {
+    const { error } = await supabase.functions.invoke("handle-contact-message", {
+      body: { contactMessageId },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return true;
+  } catch (error) {
+    console.warn("Confirmation message contact non envoyée.", error);
+    return false;
   }
 }
 
@@ -4716,6 +5914,32 @@ async function testAdminPushNotification() {
     },
     true
   );
+}
+
+async function testAdminEducationPushNotification() {
+  const booking = educationBookings
+    .filter((item) => item.id)
+    .sort((a, b) => String(b.created_at || b.booking_date || "").localeCompare(String(a.created_at || a.booking_date || "")))[0];
+
+  if (!booking) {
+    showToast("Aucune réservation ferme disponible pour tester.");
+    return;
+  }
+
+  await notifyAdminsAboutEducationBooking(booking.id, true);
+}
+
+async function testAdminKennelPushNotification() {
+  const booking = kennelBookings
+    .filter((item) => item.id)
+    .sort((a, b) => String(b.created_at || b.start_date || "").localeCompare(String(a.created_at || a.start_date || "")))[0];
+
+  if (!booking) {
+    showToast("Aucune réservation pension disponible pour tester.");
+    return;
+  }
+
+  await notifyAdminsAboutKennelBooking(booking.id, true);
 }
 
 async function notifyClientAboutStatus(orderId, status) {
@@ -4787,10 +6011,172 @@ async function updateStock() {
 
   showToast("Stock mis à jour !");
 }
+
+async function saveEggProductionLog(event) {
+  event.preventDefault();
+
+  const eggsCollected = Number(eggProductionForm.eggsCollected);
+
+  if (!eggProductionForm.logDate || !Number.isFinite(eggsCollected) || eggsCollected < 0) {
+    showToast("Indiquez une date et une quantite d'oeufs valide.");
+    return;
+  }
+
+  const { error } = await supabase.rpc("upsert_egg_production_log", {
+    p_log_date: eggProductionForm.logDate,
+    p_eggs_collected: Math.round(eggsCollected),
+    p_notes: eggProductionForm.notes.trim(),
+  });
+
+  if (error) {
+    const message = String(error.message || "");
+
+    if (message.includes("admin_required")) {
+      showToast("Acces refuse : seul l'admin peut enregistrer la ponte.");
+    } else if (message.includes("stock_not_found")) {
+      showToast("Impossible de trouver la ligne de stock.");
+    } else if (message.includes("stock_negative")) {
+      showToast("La correction rendrait le stock negatif.");
+    } else {
+      showToast("Erreur enregistrement ponte : " + error.message);
+    }
+    return;
+  }
+
+  setEggProductionForm({
+    logDate: getLocalIsoDate(),
+    eggsCollected: "",
+    notes: "",
+  });
+  await Promise.all([loadEggProductionLogs(), loadStock()]);
+  showToast("Ponte enregistree et stock mis a jour.");
+}
+
 const todayIso = getLocalIsoDate();
+const tomorrowDate = new Date(`${todayIso}T00:00:00`);
+tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+const tomorrowIso = getLocalIsoDate(tomorrowDate);
 const recentClientCutoffDate = new Date();
 recentClientCutoffDate.setDate(recentClientCutoffDate.getDate() - 7);
 const recentClientCutoffIso = getLocalIsoDate(recentClientCutoffDate);
+const currentYear = todayIso.slice(0, 4);
+const eggProductionLogsThisYear = eggProductionLogs.filter((log) => String(log.log_date || "").startsWith(currentYear));
+const eggProductionTotalYear = eggProductionLogsThisYear.reduce((sum, log) => sum + Number(log.eggs_collected || 0), 0);
+const eggProductionAverageYear = eggProductionLogsThisYear.length
+  ? Math.round(eggProductionTotalYear / eggProductionLogsThisYear.length)
+  : 0;
+const eggProductionBestDay = eggProductionLogsThisYear.reduce(
+  (best, log) => (Number(log.eggs_collected || 0) > Number(best?.eggs_collected || 0) ? log : best),
+  null
+);
+const eggProductionLast30Days = eggProductionLogs
+  .filter((log) => {
+    const logDate = new Date(`${log.log_date}T00:00:00`);
+    const limitDate = new Date(`${todayIso}T00:00:00`);
+    limitDate.setDate(limitDate.getDate() - 29);
+    return logDate >= limitDate;
+  })
+  .sort((a, b) => String(a.log_date || "").localeCompare(String(b.log_date || "")));
+const eggProductionMonthlyStats = Object.values(
+  eggProductionLogsThisYear.reduce((months, log) => {
+    const monthKey = String(log.log_date || "").slice(0, 7);
+    const current = months[monthKey] || { month: monthKey, total: 0, days: 0 };
+    current.total += Number(log.eggs_collected || 0);
+    current.days += 1;
+    months[monthKey] = current;
+    return months;
+  }, {})
+).sort((a, b) => a.month.localeCompare(b.month));
+const eggProductionLogsByDate = eggProductionLogs.reduce((days, log) => {
+  days[String(log.log_date || "")] = Number(log.eggs_collected || 0);
+  return days;
+}, {});
+const eggProductionRatioStartDate = "2026-06-13";
+const eggSalesByDate = orders
+  .filter((order) => order.status !== "Annulée")
+  .filter((order) => !order.archived_at)
+  .reduce((days, order) => {
+    const date = order.date || "";
+
+    if (!date) {
+      return days;
+    }
+
+    days[date] = (days[date] || 0) + getOrderEggs(order);
+    return days;
+  }, {});
+const eggProductionCalendarDays = getCalendarGridDates(eggProductionCalendarMonth).map((day) => {
+  const produced = eggProductionLogsByDate[day.date] || 0;
+  const sold = eggSalesByDate[day.date] || 0;
+  const balance = produced - sold;
+  const countsForRatio = day.date >= eggProductionRatioStartDate;
+
+  return {
+    ...day,
+    produced,
+    sold,
+    balance,
+    countsForRatio,
+    ratio: countsForRatio ? (produced > 0 ? Math.round((sold / produced) * 100) : sold > 0 ? 100 : 0) : 0,
+  };
+});
+const eggProductionCalendarMonthDays = eggProductionCalendarDays.filter((day) => day.inMonth);
+const eggProductionCalendarCountedDays = eggProductionCalendarMonthDays.filter((day) => day.countsForRatio);
+const eggProductionCalendarProduced = eggProductionCalendarCountedDays.reduce((sum, day) => sum + day.produced, 0);
+const eggProductionCalendarSold = eggProductionCalendarCountedDays.reduce((sum, day) => sum + day.sold, 0);
+const eggProductionCalendarBalance = eggProductionCalendarProduced - eggProductionCalendarSold;
+const eggProductionCalendarRatio = eggProductionCalendarProduced > 0
+  ? Math.round((eggProductionCalendarSold / eggProductionCalendarProduced) * 100)
+  : 0;
+const eggProductionRecentLogs = eggProductionLogs
+  .filter((log) => {
+    const logDate = new Date(`${log.log_date}T00:00:00`);
+    const limitDate = new Date(`${todayIso}T00:00:00`);
+    limitDate.setDate(limitDate.getDate() - 6);
+    return logDate >= limitDate && String(log.log_date || "") <= todayIso;
+  })
+  .sort((a, b) => String(a.log_date || "").localeCompare(String(b.log_date || "")));
+const eggProductionToday = eggProductionLogsByDate[todayIso] || 0;
+const eggProductionRecentAverage = eggProductionRecentLogs.length
+  ? Math.round(
+      eggProductionRecentLogs.reduce((sum, log) => sum + Number(log.eggs_collected || 0), 0) /
+        eggProductionRecentLogs.length
+    )
+  : eggProductionAverageYear;
+const eggStockForecastDays = Array.from({ length: 7 }, (_, index) => {
+  const date = new Date(`${todayIso}T00:00:00`);
+  date.setDate(date.getDate() + index);
+  return getLocalIsoDate(date);
+});
+const eggForecastSalesByDate = orders
+  .filter((order) => !order.archived_at && order.status !== "Annulée")
+  .filter((order) => eggStockForecastDays.includes(order.date))
+  .reduce((days, order) => {
+    days[order.date] = (days[order.date] || 0) + getOrderEggs(order);
+    return days;
+  }, {});
+let eggProjectedRunningStock = stockEggs;
+const eggStockForecastRows = eggStockForecastDays.map((date) => {
+  const estimatedProduction =
+    eggProductionLogsByDate[date] !== undefined ? eggProductionLogsByDate[date] : eggProductionRecentAverage;
+  const plannedSales = eggForecastSalesByDate[date] || 0;
+  eggProjectedRunningStock += estimatedProduction - plannedSales;
+
+  return {
+    date,
+    estimatedProduction,
+    plannedSales,
+    estimatedStock: eggProjectedRunningStock,
+  };
+});
+const eggStockForecastSalesTotal = eggStockForecastRows.reduce((sum, day) => sum + day.plannedSales, 0);
+const eggStockForecastProductionTotal = eggStockForecastRows.reduce((sum, day) => sum + day.estimatedProduction, 0);
+const eggStockForecastEnd = eggStockForecastRows[eggStockForecastRows.length - 1]?.estimatedStock ?? stockEggs;
+const eggStockForecastLowest = eggStockForecastRows.reduce(
+  (lowest, day) => Math.min(lowest, day.estimatedStock),
+  stockEggs
+);
+const eggStockForecastHasRisk = eggStockForecastLowest < 0;
 const filteredOrdersBase =
   (adminFilter === "En cours"
     ? orders.filter(
@@ -4850,9 +6236,17 @@ const adminStats = {
     .reduce((sum, o) => sum + getOrderRevenue(o), 0),
 };
 
+function isClientMissingContactInfo(profile) {
+  return !profile.is_admin && (!String(profile.phone || "").trim() || !String(profile.delivery_address || "").trim());
+}
+
 const filteredCustomerProfiles = customerProfiles
   .filter((profile) => {
     if (clientQuickFilter === "recent" && String(profile.created_at || "").slice(0, 10) < recentClientCutoffIso) {
+      return false;
+    }
+
+    if (clientQuickFilter === "missing-contact" && !isClientMissingContactInfo(profile)) {
       return false;
     }
 
@@ -5032,6 +6426,97 @@ const selectedClientTimeline = selectedClientProfile
       .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
   : [];
 const normalizedAdminGlobalSearch = adminGlobalSearch.trim().toLowerCase();
+function scrollToAdminTarget(elementId) {
+  if (!canUseBrowser) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    document.getElementById(elementId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 80);
+}
+
+function openClientProfileFromAdminSearch(profile) {
+  setAdminView("clients");
+  setClientSearch(profile.full_name || profile.email || "");
+  setSelectedClientProfileId(profile.id);
+  scrollToAdminTarget("admin-client-detail-panel");
+}
+
+function findClientProfileForAdminItem(item = {}) {
+  const email = String(item.email || item.client_email || "").trim().toLowerCase();
+  const phone = getSmsPhoneNumber(item.phone || item.client_phone || "");
+  const name = String(item.client || item.client_name || "").trim().toLowerCase();
+
+  return (
+    customerProfiles.find((profile) => {
+      const profileEmail = String(profile.email || "").trim().toLowerCase();
+      const profilePhone = getSmsPhoneNumber(profile.phone || "");
+      const profileName = String(profile.full_name || "").trim().toLowerCase();
+
+      return (
+        (email && profileEmail === email) ||
+        (phone && profilePhone === phone) ||
+        (name && profileName === name)
+      );
+    }) || null
+  );
+}
+
+function openClientProfileOrFallback(item, fallback) {
+  const profile = findClientProfileForAdminItem(item);
+
+  if (profile) {
+    openClientProfileFromAdminSearch(profile);
+    return;
+  }
+
+  fallback();
+}
+
+function openDogProfileFromAdminSearch(dogProfileId) {
+  setAdminView("kennelDogs");
+  setSelectedDogProfileId(dogProfileId);
+  scrollToAdminTarget(`kennel-dog-profile-${dogProfileId}`);
+}
+
+const adminDogSearchResults = Object.values(
+  kennelBookings.reduce((dogs, booking) => {
+    const dogProfileId = booking.dog?.id || `missing-${booking.id}`;
+    const current = dogs[dogProfileId] || {
+      id: dogProfileId,
+      dog: booking.dog || null,
+      clients: new Set(),
+      phones: new Set(),
+      haystack: [],
+    };
+
+    if (booking.client_name) {
+      current.clients.add(booking.client_name);
+    }
+    if (booking.phone) {
+      current.phones.add(booking.phone);
+    }
+    current.haystack.push(
+      booking.dog?.name,
+      booking.dog?.breed,
+      booking.dog?.sex,
+      booking.dog?.birth_year,
+      booking.dog?.notes,
+      booking.dog?.food_notes,
+      booking.dog?.behavior_notes,
+      booking.dog?.medical_notes,
+      booking.dog?.emergency_contact_name,
+      booking.dog?.emergency_contact_phone,
+      booking.client_name,
+      booking.client_email,
+      booking.phone
+    );
+    dogs[dogProfileId] = current;
+    return dogs;
+  }, {})
+);
+
 const adminGlobalSearchResults = normalizedAdminGlobalSearch
   ? [
   ...customerProfiles.map((profile) => ({
@@ -5040,11 +6525,19 @@ const adminGlobalSearchResults = normalizedAdminGlobalSearch
         title: profile.full_name || profile.email || "Client",
         detail: [profile.email, profile.phone, profile.delivery_address].filter(Boolean).join(" - "),
         haystack: [profile.full_name, profile.email, profile.phone, profile.delivery_address, profile.internal_notes],
-        action: () => {
-          setAdminView("clients");
-          setClientSearch(profile.full_name || profile.email || "");
-          setSelectedClientProfileId(profile.id);
-        },
+        action: () => openClientProfileFromAdminSearch(profile),
+      })),
+      ...adminDogSearchResults.map((profile) => ({
+        id: `dog-${profile.id}`,
+        type: "Chien",
+        title: profile.dog?.name || "Chien non renseignÃ©",
+        detail: [
+          [profile.dog?.breed, profile.dog?.sex, profile.dog?.birth_year].filter(Boolean).join(" - "),
+          Array.from(profile.clients).join(", "),
+          Array.from(profile.phones).join(", "),
+        ].filter(Boolean).join(" - "),
+        haystack: profile.haystack,
+        action: () => openDogProfileFromAdminSearch(profile.id),
       })),
       ...adminReminders.map((reminder) => {
         const profile = customerProfiles.find((item) => item.id === reminder.profile_id);
@@ -5065,10 +6558,10 @@ const adminGlobalSearchResults = normalizedAdminGlobalSearch
             profile?.phone,
           ],
           action: () => {
-            setAdminView("clients");
             if (profile?.id) {
-              setSelectedClientProfileId(profile.id);
-              setClientSearch(profile.full_name || profile.email || "");
+              openClientProfileFromAdminSearch(profile);
+            } else {
+              setAdminView("clients");
             }
           },
         };
@@ -5087,13 +6580,14 @@ const adminGlobalSearchResults = normalizedAdminGlobalSearch
           order.date,
           getOrderSummary(order),
         ],
-        action: () => {
-          setAdminView("eggs");
-          setAdminArchiveView(order.archived_at ? "archived" : "active");
-          setAdminFilter("Toutes");
-          setAdminOrderShortcut("all");
-          setAdminSearch(order.client || order.email || order.date || "");
-        },
+        action: () =>
+          openClientProfileOrFallback(order, () => {
+            setAdminView("eggs");
+            setAdminArchiveView(order.archived_at ? "archived" : "active");
+            setAdminFilter("Toutes");
+            setAdminOrderShortcut("all");
+            setAdminSearch(order.client || order.email || order.date || "");
+          }),
       })),
       ...educationBookings.map((booking) => ({
         id: `education-${booking.id}`,
@@ -5109,10 +6603,11 @@ const adminGlobalSearchResults = normalizedAdminGlobalSearch
           booking.notes,
           booking.status,
         ],
-        action: () => {
-          setAdminView("education");
-          setEducationReservationFilter("all");
-        },
+        action: () =>
+          openClientProfileOrFallback(booking, () => {
+            setAdminView("education");
+            setEducationReservationFilter("all");
+          }),
       })),
       ...kennelBookings.map((booking) => ({
         id: `kennel-${booking.id}`,
@@ -5143,10 +6638,8 @@ const adminGlobalSearchResults = normalizedAdminGlobalSearch
           booking.dog?.emergency_contact_name,
           booking.dog?.emergency_contact_phone,
         ],
-        action: () => {
-          setAdminView("kennel");
-          setKennelReservationFilter("all");
-        },
+        action: () =>
+          openClientProfileOrFallback(booking, () => openDogProfileFromAdminSearch(booking.dog?.id || `missing-${booking.id}`)),
       })),
     ]
       .filter((result) =>
@@ -5156,6 +6649,16 @@ const adminGlobalSearchResults = normalizedAdminGlobalSearch
       )
       .slice(0, 12)
   : [];
+
+function openAdminView(view) {
+  setAdminView(view);
+
+  if (view === "cancellations" && canUseBrowser) {
+    const seenAt = new Date().toISOString();
+    localStorage.setItem("admin-cancellations-seen-at", seenAt);
+    setCancellationsSeenAt(seenAt);
+  }
+}
 
 function getFilteredReservationBookings(bookings, filter, dateField = "booking_date") {
   return bookings
@@ -5250,6 +6753,12 @@ const clientAccountKennelBookings = clientAccountEmail
       .filter((booking) => String(booking.client_email || "").trim().toLowerCase() === clientAccountEmail)
       .sort((a, b) => String(b.start_date || "").localeCompare(String(a.start_date || "")))
   : [];
+const clientAccountOccasionalSales = myOccasionalSaleReservations;
+const clientDemandCount =
+  myOrders.length +
+  clientAccountEducationBookings.length +
+  clientAccountKennelBookings.length +
+  clientAccountOccasionalSales.length;
 const clientAccountDogs = Object.values(
   clientAccountKennelBookings.reduce((dogs, booking) => {
     const key = booking.dog?.id || booking.dog?.name || booking.id;
@@ -5268,22 +6777,26 @@ const latestClientOrderStatus = latestClientOrder
   ? normalizeOrderStatus(latestClientOrder.status || "À préparer")
   : "";
 const clientNotificationLabel = clientPushStatus === "enabled" ? "Notifications actives" : "Notifications à activer";
+const selectedKennelBookingDays = getKennelBookingDays(kennelBookingForm.startDate, kennelBookingForm.endDate);
+const kennelDailyService = getKennelDailyBillingService();
+const selectedKennelEstimatedAmount = selectedKennelBookingDays * Number(kennelDailyService?.price || 0);
+const selectedKennelCalendarDates = getKennelCalendarStayDates(kennelBookingForm.startDate, kennelBookingForm.endDate);
 const kennelCalendarDays = (() => {
   const days = [];
 
   getCalendarGridDates(kennelCalendarMonth).forEach((day) => {
-    const bookingsForNight = kennelBookings.filter((booking) => {
+    const bookingsForDay = kennelBookings.filter((booking) => {
       if (String(booking.status || "").toLowerCase().startsWith("annul")) {
         return false;
       }
 
-      return getKennelNights(booking.start_date, booking.end_date).includes(day.date);
+      return getKennelCalendarStayDates(booking.start_date, booking.end_date).includes(day.date);
     });
     const blockedDate = getBlockedKennelDate(day.date);
 
     days.push({
       ...day,
-      bookings: bookingsForNight,
+      bookings: bookingsForDay,
       blockedDate,
     });
   });
@@ -5291,16 +6804,16 @@ const kennelCalendarDays = (() => {
   return days;
 })();
 const clientKennelCalendarDays = getCalendarGridDates(clientKennelCalendarMonth).map((day) => {
-  const availabilityForNight = kennelAvailability.find((availability) => availability.night_date === day.date);
-  const bookingsCount =
-    Number(availabilityForNight?.bookings_count ?? availabilityForNight?.bookingsCount ?? 0) ||
-    kennelBookings.filter((booking) => {
+  const availabilityForDay = kennelAvailability.find((availability) => availability.night_date === day.date);
+  const availabilityBookingsCount = Number(availabilityForDay?.bookings_count ?? availabilityForDay?.bookingsCount ?? 0) || 0;
+  const calendarBookingsCount = kennelBookings.filter((booking) => {
       if (String(booking.status || "").toLowerCase().startsWith("annul")) {
         return false;
       }
 
-      return getKennelNights(booking.start_date, booking.end_date).includes(day.date);
+      return getKennelCalendarStayDates(booking.start_date, booking.end_date).includes(day.date);
     }).length;
+  const bookingsCount = Math.max(availabilityBookingsCount, calendarBookingsCount);
   const blockedDate = getBlockedKennelDate(day.date);
   const remainingSpots = Math.max(0, KENNEL_MAX_BOOKINGS_PER_NIGHT - bookingsCount);
   const isFull = bookingsCount >= KENNEL_MAX_BOOKINGS_PER_NIGHT;
@@ -5345,7 +6858,7 @@ function selectKennelCalendarDay(day) {
 
   const currentStartDate = kennelBookingForm.startDate;
 
-  if (!currentStartDate || day.date <= currentStartDate || kennelBookingForm.endDate) {
+  if (!currentStartDate || day.date < currentStartDate || kennelBookingForm.endDate) {
     setKennelBookingForm({
       ...kennelBookingForm,
       startDate: day.date,
@@ -5402,9 +6915,7 @@ const deliveryPlanning = (() => {
     .map((day) => ({
       ...day,
       products: Array.from(day.products.values()),
-      orders: day.orders.sort((a, b) =>
-        `${a.client || ""} ${a.address || ""}`.localeCompare(`${b.client || ""} ${b.address || ""}`)
-      ),
+      orders: getOptimizedDeliveryOrders(day.orders),
     }))
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
 })();
@@ -5461,6 +6972,55 @@ const pendingKennelRequestsCount = kennelBookings.filter(
   (booking) => !booking.archived_at && (booking.status || "Demandée") === "Demandée"
 ).length;
 const pendingReservationsCount = pendingEducationRequestsCount + pendingKennelRequestsCount;
+const occasionalSalesToFollowUp = occasionalSaleReservations.filter((reservation) =>
+  !["Terminée", "Annulée"].includes(reservation.status || "Nouvelle")
+);
+const adminFastActions = [
+  {
+    id: "fast-today-orders",
+    label: "Commandes du jour",
+    count: todayOrders.length,
+    detail:
+      todayOrders.length > 0
+        ? `${todayOrders.length} commande${todayOrders.length > 1 ? "s" : ""} à préparer ou suivre aujourd'hui.`
+        : "Aucune commande prévue aujourd'hui.",
+    tone: todayOrders.length > 0 ? "warning" : "clear",
+    action: () => applyAdminShortcut("todayOrders"),
+  },
+  {
+    id: "fast-unhandled-messages",
+    label: "Messages non traités",
+    count: urgentContactMessages.length,
+    detail:
+      urgentContactMessages.length > 0
+        ? `Dernier message de ${urgentContactMessages[0].full_name || "Client"}.`
+        : "Aucun message client en attente.",
+    tone: urgentContactMessages.length > 0 ? "danger" : "clear",
+    action: () => setAdminView("contacts"),
+  },
+  {
+    id: "fast-pending-reservations",
+    label: "Réservations à confirmer",
+    count: pendingReservationsCount,
+    detail:
+      pendingReservationsCount > 0
+        ? `${pendingEducationRequestsCount} ferme, ${pendingKennelRequestsCount} pension.`
+        : "Aucune réservation en attente de confirmation.",
+    tone: pendingReservationsCount > 0 ? "warning" : "clear",
+    action: () => setAdminView(pendingEducationRequestsCount > 0 ? "education" : "kennel"),
+  },
+  {
+    id: "fast-occasional-sales",
+    label: "Ventes ponctuelles à rappeler",
+    count: occasionalSalesToFollowUp.length,
+    detail:
+      occasionalSalesToFollowUp.length > 0
+        ? `${occasionalSalesToFollowUp[0].client_name || "Client"} - ${occasionalSalesToFollowUp[0].quantity || 1} x ${occasionalSalesToFollowUp[0].item_name || "vente ponctuelle"}.`
+        : "Aucune vente ponctuelle à rappeler.",
+    tone: occasionalSalesToFollowUp.length > 0 ? "info" : "clear",
+    action: () => setAdminView("occasionalSales"),
+  },
+];
 const recentClientsCount = customerProfiles.filter(
   (profile) => String(profile.created_at || "").slice(0, 10) >= recentClientCutoffIso
 ).length;
@@ -5503,28 +7063,28 @@ const kennelOccupancyStats = (() => {
   const month = getLocalIsoDate().slice(0, 7);
   const [year, monthNumber] = month.split("-").map(Number);
   const daysInMonth = new Date(year, monthNumber, 0).getDate();
-  let occupiedNights = 0;
+  let occupiedDays = 0;
 
   for (let day = 1; day <= daysInMonth; day += 1) {
     const date = `${month}-${String(day).padStart(2, "0")}`;
-    const bookingsForNight = kennelBookings.filter((booking) => {
+    const bookingsForDay = kennelBookings.filter((booking) => {
       if (booking.archived_at || String(booking.status || "").toLowerCase().startsWith("annul")) {
         return false;
       }
 
-      return getKennelNights(booking.start_date, booking.end_date).includes(date);
+      return getKennelCalendarStayDates(booking.start_date, booking.end_date).includes(date);
     });
 
-    occupiedNights += bookingsForNight.length;
+    occupiedDays += bookingsForDay.length;
   }
 
-  const capacityNights = daysInMonth * KENNEL_MAX_BOOKINGS_PER_NIGHT;
-  const occupancyRate = capacityNights > 0 ? Math.round((occupiedNights / capacityNights) * 100) : 0;
+  const capacityDays = daysInMonth * KENNEL_MAX_BOOKINGS_PER_NIGHT;
+  const occupancyRate = capacityDays > 0 ? Math.round((occupiedDays / capacityDays) * 100) : 0;
 
   return {
     month,
-    occupiedNights,
-    capacityNights,
+    occupiedDays,
+    capacityDays,
     occupancyRate,
   };
 })();
@@ -5589,17 +7149,6 @@ function applyAdminShortcut(shortcut) {
   }
 }
 
-const currentKennelGuests = kennelBookings.filter((booking) => {
-  if (booking.archived_at) {
-    return false;
-  }
-
-  if (String(booking.status || "").toLowerCase().startsWith("annul")) {
-    return false;
-  }
-
-  return String(booking.start_date || "") <= todayIso && String(booking.end_date || "") > todayIso;
-});
 const activeKennelBookings = kennelBookings.filter((booking) => {
   if (booking.archived_at) {
     return false;
@@ -5607,6 +7156,13 @@ const activeKennelBookings = kennelBookings.filter((booking) => {
 
   return !String(booking.status || "").toLowerCase().startsWith("annul");
 });
+function getKennelGuestsForDate(date) {
+  return activeKennelBookings
+    .filter((booking) => getKennelCalendarStayDates(booking.start_date, booking.end_date).includes(date))
+    .sort((a, b) => String(a.dog?.name || a.client_name || "").localeCompare(String(b.dog?.name || b.client_name || "")));
+}
+
+const currentKennelGuests = getKennelGuestsForDate(todayIso);
 const todayKennelArrivals = activeKennelBookings
   .filter((booking) => String(booking.start_date || "") === todayIso)
   .sort((a, b) => String(a.dog?.name || a.client_name || "").localeCompare(String(b.dog?.name || b.client_name || "")));
@@ -5660,6 +7216,14 @@ const openEducationBookings = educationBookings.filter(
   (booking) => !booking.archived_at && !String(booking.status || "").toLowerCase().startsWith("annul")
 );
 const openKennelBookings = activeKennelBookings.filter((booking) => String(booking.end_date || "") >= todayIso);
+const kennelPaymentTrackingStartDate = "2026-06-01";
+const kennelPaymentTrackedBookings = kennelBookings.filter(
+  (booking) =>
+    !String(booking.status || "").toLowerCase().startsWith("annul") &&
+    String(booking.start_date || booking.end_date || "") >= kennelPaymentTrackingStartDate
+);
+const hasKennelStayEnded = (booking) =>
+  String(booking.end_date || booking.start_date || "") < todayIso;
 const reservationsMissingPhone = [
   ...openEducationBookings
     .filter((booking) => !String(booking.phone || "").trim())
@@ -5697,9 +7261,141 @@ const dogsMissingVaccines = Object.values(
 const educationBookingsMissingPayment = openEducationBookings
   .filter((booking) => hasMissingBookingPayment(booking, getEducationBookingAmount(booking)))
   .slice(0, 6);
-const kennelBookingsMissingPayment = openKennelBookings
+const kennelBookingsMissingPayment = kennelPaymentTrackedBookings
+  .filter(hasKennelStayEnded)
   .filter((booking) => hasMissingBookingPayment(booking, getKennelBookingAmount(booking)))
   .slice(0, 6);
+const kennelPaymentFollowups = kennelPaymentTrackedBookings
+  .filter(hasKennelStayEnded)
+  .filter((booking) => hasMissingBookingPayment(booking, getKennelBookingAmount(booking)))
+  .map((booking) => {
+    const amount = getKennelBookingAmount(booking);
+    const payment = getBookingPaymentSummary(booking, amount);
+
+    return {
+      booking,
+      amount,
+      payment,
+      remaining: payment.remaining,
+      isDue: true,
+    };
+  })
+  .sort((a, b) => {
+    if (a.isDue !== b.isDue) {
+      return a.isDue ? -1 : 1;
+    }
+
+    return String(a.booking.end_date || a.booking.start_date || "").localeCompare(
+      String(b.booking.end_date || b.booking.start_date || "")
+    );
+  });
+const kennelPaymentFollowupTotal = kennelPaymentFollowups.reduce((sum, item) => sum + item.remaining, 0);
+const kennelPaymentRows = kennelPaymentTrackedBookings
+  .map((booking) => {
+    const amount = getKennelBookingAmount(booking);
+    const payment = getBookingPaymentSummary(booking, amount);
+
+    return {
+      booking,
+      amount,
+      payment,
+      remaining: payment.remaining,
+      isMissing: hasKennelStayEnded(booking) && hasMissingBookingPayment(booking, amount),
+    };
+  })
+  .sort((a, b) => {
+    if (a.isMissing !== b.isMissing) {
+      return a.isMissing ? -1 : 1;
+    }
+
+    return String(b.booking.start_date || "").localeCompare(String(a.booking.start_date || ""));
+  });
+const kennelPaymentReceivedTotal = kennelPaymentRows.reduce((sum, item) => sum + item.payment.paidAmount, 0);
+const kennelPaymentHistory = adminActionLogs
+  .filter((log) => {
+    if (log.action_type === "notification_kennel_payment_due") {
+      return true;
+    }
+
+    return (
+      log.action_type === "kennel_booking_update" &&
+      (Object.prototype.hasOwnProperty.call(log.details || {}, "payment_received") ||
+        Object.prototype.hasOwnProperty.call(log.details || {}, "deposit_amount") ||
+        Object.prototype.hasOwnProperty.call(log.details || {}, "payment_method"))
+    );
+  })
+  .slice(0, 6);
+
+useEffect(() => {
+  if (!isAdmin || screen !== "admin" || !currentUser?.id || kennelPaymentFollowups.length === 0 || !canUseBrowser) {
+    return;
+  }
+
+  const storageKey = `admin-kennel-payment-reminders-${todayIso}`;
+  const alreadySentIds = new Set(JSON.parse(localStorage.getItem(storageKey) || "[]"));
+  const remindersToSend = kennelPaymentFollowups.filter((item) => !alreadySentIds.has(String(item.booking.id)));
+  const runKey = `${todayIso}:${remindersToSend.map((item) => item.booking.id).join("|")}`;
+
+  if (remindersToSend.length === 0 || kennelPaymentReminderRunRef.current === runKey) {
+    return;
+  }
+
+  kennelPaymentReminderRunRef.current = runKey;
+
+  const sendReminders = async () => {
+    const totalRemaining = remindersToSend.reduce((sum, item) => sum + item.remaining, 0);
+
+    const { data: insertedLogs, error: logError } = await supabase.from("admin_action_logs").insert(
+      remindersToSend.map((item) => ({
+        action_type: "notification_kennel_payment_due",
+        title: "Paiement pension à relancer",
+        target_type: "Séjour pension",
+        target_id: String(item.booking.id),
+        target_label: `${item.booking.client_name || "Client"} - ${item.booking.dog?.name || "Chien"}`,
+        details: {
+          arrivee: item.booking.start_date,
+          depart: item.booking.end_date,
+          montant: item.amount,
+          acompte: item.payment.deposit,
+          reste: item.remaining,
+          moyen_paiement: item.payment.method,
+        },
+        created_by: currentUser.id,
+        created_by_email: currentUser.email || "",
+      }))
+    ).select("*");
+
+    if (logError) {
+      console.warn("Relance paiement pension non enregistrée.", logError.message);
+    } else {
+      setAdminActionLogs((logs) => [...(insertedLogs || []), ...logs].slice(0, 80));
+    }
+
+    try {
+      await supabase.functions.invoke("send-admin-push", {
+        body: {
+          title: "Paiements pension à relancer",
+          body: `${remindersToSend.length} séjour${remindersToSend.length > 1 ? "s" : ""} à suivre - ${totalRemaining.toFixed(2)} EUR restant${totalRemaining > 1 ? "s" : ""}.`,
+          url: "/",
+        },
+      });
+    } catch (error) {
+      console.warn("Push relance paiement pension non envoyé.", error);
+    }
+
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify([...alreadySentIds, ...remindersToSend.map((item) => String(item.booking.id))])
+    );
+
+    showToast(
+      `${remindersToSend.length} paiement${remindersToSend.length > 1 ? "s" : ""} pension à relancer aujourd'hui.`
+    );
+  };
+
+  void sendReminders();
+}, [currentUser?.email, currentUser?.id, isAdmin, kennelPaymentFollowups, screen, todayIso]);
+
 const bookingsMissingPayment = [
   ...educationBookingsMissingPayment.map((booking) => ({
     id: `education-payment-${booking.id}`,
@@ -5718,6 +7414,54 @@ const dueAdminReminders = adminReminders
   .filter((reminder) => (reminder.status || "À faire") !== "Fait" && String(reminder.due_date || "") <= todayIso)
   .sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")))
   .slice(0, 6);
+function getAdmin48HourDay(date, label) {
+  const dayOrders = orders
+    .filter((order) => !order.archived_at && order.date === date && order.status !== "Annulée")
+    .sort((a, b) => `${a.client || ""} ${a.address || ""}`.localeCompare(`${b.client || ""} ${b.address || ""}`));
+  const dayEducationBookings = educationBookings
+    .filter(
+      (booking) =>
+        !booking.archived_at &&
+        String(booking.booking_date || "") === date &&
+        !["Annulée", "Terminée"].includes(booking.status || "")
+    )
+    .sort((a, b) => String(a.activity_type || "").localeCompare(String(b.activity_type || "")));
+  const dayArrivals = activeKennelBookings
+    .filter((booking) => String(booking.start_date || "") === date)
+    .sort((a, b) => String(a.dog?.name || a.client_name || "").localeCompare(String(b.dog?.name || b.client_name || "")));
+  const dayDepartures = activeKennelBookings
+    .filter((booking) => String(booking.end_date || "") === date)
+    .sort((a, b) => String(a.dog?.name || a.client_name || "").localeCompare(String(b.dog?.name || b.client_name || "")));
+  const dayGuests = getKennelGuestsForDate(date);
+  const dayReminders = adminReminders
+    .filter((reminder) => (reminder.status || "À faire") !== "Fait" && String(reminder.due_date || "") === date)
+    .sort((a, b) => String(a.priority || "").localeCompare(String(b.priority || "")));
+  const dayMessages = date === todayIso ? urgentContactMessages : [];
+
+  return {
+    date,
+    label,
+    orders: dayOrders,
+    educationBookings: dayEducationBookings,
+    kennelArrivals: dayArrivals,
+    kennelDepartures: dayDepartures,
+    kennelGuests: dayGuests,
+    reminders: dayReminders,
+    messages: dayMessages,
+    total:
+      dayOrders.length +
+      dayEducationBookings.length +
+      dayArrivals.length +
+      dayDepartures.length +
+      dayReminders.length +
+      dayMessages.length,
+  };
+}
+
+const admin48HourPlanning = [
+  getAdmin48HourDay(todayIso, "Aujourd'hui"),
+  getAdmin48HourDay(tomorrowIso, "Demain"),
+];
 const importantAdminAlerts = [
   dueAdminReminders.length > 0 && {
     id: "due-admin-reminders",
@@ -5733,7 +7477,7 @@ const importantAdminAlerts = [
     tone: "warning",
     priorityLabel: "Orange",
     title: "Pension bientôt complète",
-    detail: `${kennelNearlyFullNights.length} nuit${kennelNearlyFullNights.length > 1 ? "s" : ""} à ${KENNEL_MAX_BOOKINGS_PER_NIGHT - 1}/${KENNEL_MAX_BOOKINGS_PER_NIGHT} ou complète, première le ${formatDeliveryDate(kennelNearlyFullNights[0].date)}.`,
+    detail: `${kennelNearlyFullNights.length} journée${kennelNearlyFullNights.length > 1 ? "s" : ""} à ${KENNEL_MAX_BOOKINGS_PER_NIGHT - 1}/${KENNEL_MAX_BOOKINGS_PER_NIGHT} ou complète, première le ${formatDeliveryDate(kennelNearlyFullNights[0].date)}.`,
     actionLabel: "Voir la pension",
     action: () => setAdminView("kennelDogs"),
   },
@@ -5798,6 +7542,143 @@ const adminAlertCounts = importantAdminAlerts.reduce(
 );
 const adminUrgentAlertCount = adminAlertCounts.danger + adminAlertCounts.warning;
 const adminAlertBadgeTone = adminAlertCounts.danger > 0 ? "danger" : adminAlertCounts.warning > 0 ? "warning" : "info";
+const adminNotifications = adminActionLogs
+  .filter((log) => String(log.action_type || "").startsWith("notification_"))
+  .map((log) => {
+    const actionType = String(log.action_type || "");
+    const category =
+      actionType.includes("order") ? "Commandes" :
+      actionType.includes("contact") ? "Messages" :
+      actionType.includes("education") ? "Ferme" :
+      actionType.includes("kennel") ? "Pension" :
+      actionType.includes("occasional_sale") ? "Ventes" :
+      "Autre";
+    const tone =
+      actionType.includes("cancelled") ? "danger" :
+      actionType.includes("contact") ? "info" :
+      "warning";
+    const open = () => {
+      if (actionType.includes("order")) {
+        setAdminView("eggs");
+      } else if (actionType.includes("contact")) {
+        setAdminView("contacts");
+      } else if (actionType.includes("education")) {
+        setAdminView("education");
+      } else if (actionType.includes("kennel")) {
+        setAdminView("kennel");
+      } else if (actionType.includes("occasional_sale")) {
+        setAdminView("occasionalSales");
+      }
+    };
+
+    return { ...log, category, tone, open };
+  });
+const unreadAdminNotifications = adminNotifications.filter((notification) => !notification.seen_at);
+const adminNotificationCounts = adminNotifications.reduce(
+  (counts, notification) => ({
+    ...counts,
+    [notification.category]: (counts[notification.category] || 0) + 1,
+    total: counts.total + 1,
+  }),
+  { total: 0 }
+);
+const displayedAdminNotifications = adminNotifications.filter((notification) => {
+  if (adminNotificationFilter === "unread") {
+    return !notification.seen_at;
+  }
+
+  if (adminNotificationFilter === "all") {
+    return true;
+  }
+
+  return notification.category === adminNotificationFilter;
+});
+const clientCancelledOrderIds = new Set(
+  adminActionLogs
+    .filter((log) => log.action_type === "notification_order_cancelled" && log.target_id)
+    .map((log) => String(log.target_id))
+);
+const cancelledItems = [
+  ...orders
+    .filter((order) => order.status === "Annulée")
+    .map((order) => {
+      const cancelLog = adminActionLogs.find(
+        (log) => log.action_type === "notification_order_cancelled" && String(log.target_id) === String(order.id)
+      );
+
+      return {
+        id: `order-${order.id}`,
+        type: "Commande d'œufs",
+        client: order.client || order.email || "Client",
+        contact: order.email || "",
+        detail: getOrderSummary(order),
+        dateLabel: "Livraison",
+        dateValue: order.date,
+        cancelledAt: cancelLog?.created_at || order.updated_at || order.created_at || order.date,
+        amount: getOrderRevenue(order),
+        origin: clientCancelledOrderIds.has(String(order.id)) ? "Annulée par le client" : "Annulation enregistrée",
+        open: () => {
+          setAdminFilter("Annulée");
+          setAdminSearch(order.client || order.email || "");
+          setAdminView("eggs");
+        },
+      };
+    }),
+  ...educationBookings
+    .filter((booking) => String(booking.status || "").toLowerCase().startsWith("annul"))
+    .map((booking) => ({
+      id: `education-${booking.id}`,
+      type: "Réservation ferme",
+      client: booking.client_name || booking.client_email || "Client",
+      contact: [booking.client_email, booking.phone].filter(Boolean).join(" - "),
+      detail: [booking.activity_type, `${booking.participants || 0} participant(s)`].filter(Boolean).join(" - "),
+      dateLabel: "Date activité",
+      dateValue: booking.booking_date,
+      cancelledAt: booking.updated_at || booking.created_at || booking.booking_date,
+      amount: getEducationBookingAmount(booking),
+      origin: "Annulation enregistrée",
+      open: () => {
+        setAdminView("education");
+      },
+    })),
+  ...kennelBookings
+    .filter((booking) => String(booking.status || "").toLowerCase().startsWith("annul"))
+    .map((booking) => ({
+      id: `kennel-${booking.id}`,
+      type: "Réservation pension",
+      client: booking.client_name || booking.client_email || "Client",
+      contact: [booking.client_email, booking.phone].filter(Boolean).join(" - "),
+      detail: [booking.dog?.name || "Chien", `${formatDeliveryDate(booking.start_date)} au ${formatDeliveryDate(booking.end_date)}`].filter(Boolean).join(" - "),
+      dateLabel: "Séjour",
+      dateValue: booking.start_date,
+      cancelledAt: booking.updated_at || booking.created_at || booking.start_date,
+      amount: getKennelBookingAmount(booking),
+      origin: "Annulation enregistrée",
+      open: () => {
+        setAdminView("kennel");
+      },
+    })),
+  ...occasionalSaleReservations
+    .filter((reservation) => String(reservation.status || "").toLowerCase().startsWith("annul"))
+    .map((reservation) => ({
+      id: `occasional-${reservation.id}`,
+      type: "Vente ponctuelle",
+      client: reservation.client_name || reservation.client_email || "Client",
+      contact: [reservation.client_email, reservation.phone].filter(Boolean).join(" - "),
+      detail: `${reservation.quantity || 0} x ${reservation.item_name || "Produit"}`,
+      dateLabel: "Demande",
+      dateValue: String(reservation.created_at || "").slice(0, 10),
+      cancelledAt: reservation.updated_at || reservation.created_at,
+      amount: getOccasionalSaleReservationAmount(reservation),
+      origin: "Annulation enregistrée",
+      open: () => {
+        setAdminView("occasionalSales");
+      },
+    })),
+].sort((a, b) => String(b.cancelledAt || "").localeCompare(String(a.cancelledAt || "")));
+const unseenCancelledItems = cancellationsSeenAt
+  ? cancelledItems.filter((item) => String(item.cancelledAt || "") > cancellationsSeenAt)
+  : cancelledItems;
 const adminTodoItems = [
   ...importantAdminAlerts.map((alert) => ({
     ...alert,
@@ -5855,6 +7736,8 @@ const configuredImageUrls = [
   homeFeaturedEvent.image_url,
   ...parseGalleryImages(homeFeaturedEvent.gallery_images),
   ...(homeNewsContent.items || []).map((item) => item.image_url),
+  occasionalSalesContent.image_url,
+  ...(occasionalSalesContent.items || []).map((item) => item.image_url),
 ]
   .map(normalizeImageUrl)
   .filter(Boolean);
@@ -5872,8 +7755,15 @@ const filteredMediaImages = imageOptions.filter((imageUrl) => {
   return imageUrl.toLowerCase().includes(search) || getImageOptionLabel(imageUrl).toLowerCase().includes(search);
 });
 const unusedMediaImagesCount = imageOptions.filter((imageUrl) => !usedImageSet.has(imageUrl)).length;
-const clientsMissingContactInfo = customerProfiles.filter(
-  (profile) => !profile.is_admin && (!String(profile.phone || "").trim() || !String(profile.delivery_address || "").trim())
+const clientsMissingContactInfo = customerProfiles.filter(isClientMissingContactInfo);
+const addressValidationCounts = customerProfiles.reduce(
+  (counts, profile) => {
+    if (profile.is_admin) return counts;
+    const status = profile.address_validation_status || "unchecked";
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  },
+  { exact: 0, suggestion: 0, review: 0, missing: 0, unchecked: 0 }
 );
 const lastAnnouncementWithIssue = announcementHistory.find(
   (announcement) =>
@@ -5953,7 +7843,14 @@ const healthChecks = [
         ? "Les clients chargés ont leurs coordonnées principales."
         : "Aucun client chargé pour le moment.",
     actionLabel: "Voir clients",
-    action: () => setAdminView("clients"),
+    action: () => {
+      setClientQuickFilter("missing-contact");
+      setClientAccessFilter("all");
+      setClientSearch("");
+      setClientSort("name");
+      setAdminView("clients");
+      scrollToAdminTarget("admin-clients-panel");
+    },
   },
   {
     id: "notifications",
@@ -6118,16 +8015,33 @@ function getEducationBookingAmount(booking) {
   return Number(activity?.price || 0) * Number(booking.participants || 0);
 }
 
+function getKennelDailyBillingService() {
+  const services = kennelServices.filter((service) => service.active !== false);
+  const candidates = services.length > 0 ? services : kennelServices;
+  const hasPrice = (service) => Number(service?.price || 0) > 0;
+  const hasDayUnit = (service) => String(service?.unit_label || "").toLowerCase().includes("jour");
+  const hasNightUnit = (service) => String(service?.unit_label || "").toLowerCase().includes("nuit");
+
+  return (
+    candidates.find((service) => hasDayUnit(service) && hasPrice(service)) ||
+    candidates.find((service) => service.id === "day-care" && hasPrice(service)) ||
+    candidates.find((service) => hasNightUnit(service) && hasPrice(service)) ||
+    candidates.find((service) => service.id === "overnight" && hasPrice(service)) ||
+    candidates.find(hasDayUnit) ||
+    candidates.find((service) => service.id === "day-care") ||
+    candidates.find(hasNightUnit) ||
+    candidates.find((service) => service.id === "overnight") ||
+    candidates[0]
+  );
+}
+
 function getKennelBookingAmount(booking) {
   if (booking.amount_confirmed !== null && booking.amount_confirmed !== undefined && booking.amount_confirmed !== "") {
     return Number(booking.amount_confirmed || 0);
   }
 
-  const nightlyService =
-    kennelServices.find((service) => String(service.unit_label || "").toLowerCase().includes("nuit")) ||
-    kennelServices.find((service) => service.id === "overnight") ||
-    kennelServices[0];
-  return getKennelNights(booking.start_date, booking.end_date).length * Number(nightlyService?.price || 0);
+  const dailyService = getKennelDailyBillingService();
+  return getKennelBookingDays(booking.start_date, booking.end_date) * Number(dailyService?.price || 0);
 }
 
 function getBookingPaymentSummary(booking, amount) {
@@ -6145,6 +8059,35 @@ function getBookingPaymentSummary(booking, amount) {
     method,
     label: received ? "Paiement reçu" : deposit > 0 ? "Acompte payé" : "Paiement à suivre",
     tone: received ? "paid" : deposit > 0 ? "partial" : "missing",
+  };
+}
+
+function parseAccountingAmount(value) {
+  const normalizedValue = String(value || "")
+    .replace(",", ".")
+    .replace(/[^0-9.]/g, "");
+  const amount = Number(normalizedValue || 0);
+
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function getOccasionalSaleReservationAmount(reservation) {
+  const item = (occasionalSalesContent.items || []).find((saleItem) => saleItem.id === reservation.item_id);
+  const unitPrice = parseAccountingAmount(item?.price);
+
+  return Number(reservation.quantity || 0) * unitPrice;
+}
+
+function getOccasionalSalePaymentSummary(reservation, amount) {
+  const paid = reservation.status === "Terminée";
+
+  return {
+    deposit: 0,
+    received: paid,
+    paidAmount: paid ? amount : 0,
+    remaining: paid ? 0 : amount,
+    method: "Non renseigné",
+    label: paid ? "Paiement à vérifier" : "À encaisser",
   };
 }
 
@@ -6183,6 +8126,8 @@ const accountingRows = [
       amountSource: "Commande",
       paymentLabel: order.status === "Livrée" ? "Paiement reçu" : "À suivre",
       paymentMethod: "Non renseigné",
+      depositAmount: 0,
+      paidAmount: order.status === "Livrée" ? getOrderRevenue(order) : 0,
       paymentRemaining: order.status === "Livrée" ? 0 : getOrderRevenue(order),
       status: order.status,
     })),
@@ -6199,6 +8144,8 @@ const accountingRows = [
       amountSource: booking.amount_confirmed !== null && booking.amount_confirmed !== undefined ? "Confirmé" : "Estimé",
       paymentLabel: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).label,
       paymentMethod: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).method,
+      depositAmount: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).deposit,
+      paidAmount: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).paidAmount,
       paymentRemaining: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).remaining,
       status: booking.status || "Demandée",
     })),
@@ -6210,14 +8157,39 @@ const accountingRows = [
       activityLabel: "Pension canine",
       date: booking.start_date,
       client: booking.client_name,
-      detail: `${booking.dog?.name || "Chien"} - ${getKennelNights(booking.start_date, booking.end_date).length} nuitée${getKennelNights(booking.start_date, booking.end_date).length > 1 ? "s" : ""}`,
+      detail: `${booking.dog?.name || "Chien"} - ${getKennelBookingDays(booking.start_date, booking.end_date)} jour${getKennelBookingDays(booking.start_date, booking.end_date) > 1 ? "s" : ""} réservé${getKennelBookingDays(booking.start_date, booking.end_date) > 1 ? "s" : ""}`,
       amount: getKennelBookingAmount(booking),
       amountSource: booking.amount_confirmed !== null && booking.amount_confirmed !== undefined ? "Confirmé" : "Estimé",
       paymentLabel: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).label,
       paymentMethod: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).method,
+      depositAmount: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).deposit,
+      paidAmount: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).paidAmount,
       paymentRemaining: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).remaining,
       status: booking.status || "Demandée",
     })),
+  ...occasionalSaleReservations
+    .filter((reservation) => reservation.status !== "Annulée")
+    .map((reservation) => {
+      const amount = getOccasionalSaleReservationAmount(reservation);
+      const payment = getOccasionalSalePaymentSummary(reservation, amount);
+
+      return {
+        id: `occasional-sale-${reservation.id}`,
+        activity: "occasional_sales",
+        activityLabel: "Ventes ponctuelles",
+        date: String(reservation.created_at || "").slice(0, 10),
+        client: reservation.client_name,
+        detail: `${reservation.quantity || 1} x ${reservation.item_name}`,
+        amount,
+        amountSource: amount > 0 ? "Calculé" : "Prix non renseigné",
+        paymentLabel: payment.label,
+        paymentMethod: payment.method,
+        depositAmount: payment.deposit,
+        paidAmount: payment.paidAmount,
+        paymentRemaining: payment.remaining,
+        status: reservation.status || "Nouvelle",
+      };
+    }),
 ]
   .filter((row) => {
     if (accountingActivity !== "all" && row.activity !== accountingActivity) {
@@ -6240,9 +8212,11 @@ const accountingTotals = accountingRows.reduce(
   (totals, row) => ({
     ...totals,
     global: totals.global + row.amount,
+    paid: totals.paid + row.paidAmount,
+    remaining: totals.remaining + row.paymentRemaining,
     [row.activity]: totals[row.activity] + row.amount,
   }),
-  { global: 0, eggs: 0, education: 0, kennel: 0 }
+  { global: 0, paid: 0, remaining: 0, eggs: 0, education: 0, kennel: 0, occasional_sales: 0 }
 );
 
 const trafficTodayIso = getLocalIsoDate();
@@ -6380,6 +8354,22 @@ function getOrderEggs(order) {
   );
 }
 
+function getOrderDuplicateSignatureFromItems(items) {
+  return (items || [])
+    .filter((item) => Number(item.quantity || 0) > 0)
+    .map((item) => ({
+      key: String(item.product_id || item.name || "").trim().toLowerCase(),
+      quantity: Number(item.quantity || 0),
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((item) => `${item.key}:${item.quantity}`)
+    .join("|");
+}
+
+function getOrderDuplicateSignature(order) {
+  return getOrderDuplicateSignatureFromItems(getOrderItems(order));
+}
+
 function getOrderSummary(order) {
   const items = getOrderItems(order);
 
@@ -6491,7 +8481,7 @@ function downloadJson(filename, data) {
 }
 
 function exportOrdersPeriodCsv() {
-  const headers = ["Client", "Email", "Date", "Adresse", "Commentaire", "Produits", "Total œufs", "Montant EUR", "Statut", "Archive"];
+  const headers = ["Client", "Email", "Date", "Adresse", "Commentaire", "Produits", "Total œufs", "Montant EUR", "Acompte EUR", "Payé EUR", "Reste EUR", "Paiement", "Moyen paiement", "Statut", "Archive"];
   const rows = orders
     .filter((order) => isDateInExportPeriod(order.date))
     .map((order) => [
@@ -6503,6 +8493,11 @@ function exportOrdersPeriodCsv() {
       getOrderSummary(order),
       getOrderEggs(order),
       getOrderRevenue(order).toFixed(2),
+      "0.00",
+      (order.status === "Livrée" ? getOrderRevenue(order) : 0).toFixed(2),
+      (order.status === "Livrée" ? 0 : getOrderRevenue(order)).toFixed(2),
+      order.status === "Livrée" ? "Paiement reçu" : "À suivre",
+      "Non renseigné",
       order.status,
       order.archived_at ? "Oui" : "Non",
     ]);
@@ -6511,7 +8506,7 @@ function exportOrdersPeriodCsv() {
 }
 
 function exportEducationPeriodCsv() {
-  const headers = ["Date", "Activité", "Client", "Email", "Téléphone", "Accompagnateur", "Participants", "Enfants", "Notes", "Montant EUR", "Acompte EUR", "Reste EUR", "Paiement reçu", "Moyen paiement", "Statut", "Archive"];
+  const headers = ["Date", "Activité", "Client", "Email", "Téléphone", "Accompagnateur", "Participants", "Enfants", "Notes", "Montant EUR", "Acompte EUR", "Payé EUR", "Reste EUR", "Paiement reçu", "Moyen paiement", "Statut", "Archive"];
   const rows = educationBookings
     .filter((booking) => isDateInExportPeriod(booking.booking_date))
     .map((booking) => [
@@ -6528,6 +8523,7 @@ function exportEducationPeriodCsv() {
       booking.notes,
       getEducationBookingAmount(booking).toFixed(2),
       getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).deposit.toFixed(2),
+      getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).paidAmount.toFixed(2),
       getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).remaining.toFixed(2),
       booking.payment_received ? "Oui" : "Non",
       booking.payment_method || "Non renseigné",
@@ -6539,7 +8535,7 @@ function exportEducationPeriodCsv() {
 }
 
 function exportKennelPeriodCsv() {
-  const headers = ["Arrivée", "Départ", "Client", "Email", "Téléphone", "Chien", "Race", "Sexe", "Année naissance", "Vaccins", "Stérilisé", "Notes", "Montant EUR", "Acompte EUR", "Reste EUR", "Paiement reçu", "Moyen paiement", "Statut", "Archive"];
+  const headers = ["Arrivée", "Départ", "Client", "Email", "Téléphone", "Chien", "Race", "Sexe", "Année naissance", "Pucé", "Numéro puce", "Vaccins", "Stérilisé", "Notes", "Montant EUR", "Acompte EUR", "Payé EUR", "Reste EUR", "Paiement reçu", "Moyen paiement", "Statut", "Archive"];
   const rows = kennelBookings
     .filter((booking) => isDateInExportPeriod(booking.start_date))
     .map((booking) => [
@@ -6552,11 +8548,14 @@ function exportKennelPeriodCsv() {
       booking.dog?.breed,
       booking.dog?.sex,
       booking.dog?.birth_year,
+      booking.dog?.is_microchipped === false ? "Non" : "Oui",
+      booking.dog?.microchip_number || "",
       booking.dog?.vaccines_up_to_date ? "Oui" : "Non",
       booking.dog?.sterilized ? "Oui" : "Non",
       booking.notes || booking.dog?.notes || "",
       getKennelBookingAmount(booking).toFixed(2),
       getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).deposit.toFixed(2),
+      getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).paidAmount.toFixed(2),
       getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).remaining.toFixed(2),
       booking.payment_received ? "Oui" : "Non",
       booking.payment_method || "Non renseigné",
@@ -6565,6 +8564,35 @@ function exportKennelPeriodCsv() {
     ]);
 
   downloadCsv(`reservations-pension-canine-${getExportRangeLabel()}.csv`, headers, rows);
+}
+
+function exportOccasionalSalesPeriodCsv() {
+  const headers = ["Date", "Produit", "Client", "Email", "Téléphone", "Quantité", "Montant EUR", "Acompte EUR", "Payé EUR", "Reste EUR", "Paiement", "Moyen paiement", "Statut", "Message"];
+  const rows = occasionalSaleReservations
+    .filter((reservation) => isDateInExportPeriod(reservation.created_at))
+    .map((reservation) => {
+      const amount = getOccasionalSaleReservationAmount(reservation);
+      const payment = getOccasionalSalePaymentSummary(reservation, amount);
+
+      return [
+        String(reservation.created_at || "").slice(0, 10),
+        reservation.item_name,
+        reservation.client_name,
+        reservation.client_email,
+        reservation.phone,
+        reservation.quantity,
+        amount.toFixed(2),
+        payment.deposit.toFixed(2),
+        payment.paidAmount.toFixed(2),
+        payment.remaining.toFixed(2),
+        payment.label,
+        payment.method,
+        reservation.status || "Nouvelle",
+        reservation.notes || "",
+      ];
+    });
+
+  downloadCsv(`ventes-ponctuelles-${getExportRangeLabel()}.csv`, headers, rows);
 }
 
 function exportClientsPeriodCsv() {
@@ -6586,7 +8614,7 @@ function exportClientsPeriodCsv() {
 }
 
 function exportAccountingCsv() {
-  const headers = ["Date", "Activité", "Client", "Détail", "Montant EUR", "Type montant", "Paiement", "Reste EUR", "Moyen paiement", "Statut"];
+  const headers = ["Date", "Activité", "Client", "Détail", "Montant EUR", "Type montant", "Acompte EUR", "Payé EUR", "Reste EUR", "Paiement", "Moyen paiement", "Statut"];
   const rows = accountingRows.map((row) => [
     row.date,
     row.activityLabel,
@@ -6594,8 +8622,10 @@ function exportAccountingCsv() {
     row.detail,
     row.amount.toFixed(2),
     row.amountSource,
-    row.paymentLabel,
+    row.depositAmount.toFixed(2),
+    row.paidAmount.toFixed(2),
     row.paymentRemaining.toFixed(2),
+    row.paymentLabel,
     row.paymentMethod,
     row.status,
   ]);
@@ -6613,6 +8643,7 @@ function exportAllDataBackup() {
       commandes: orders.length,
       reservations_ferme: educationBookings.length,
       reservations_pension: kennelBookings.length,
+      ventes_ponctuelles: occasionalSaleReservations.length,
       fiches_chiens: kennelDogProfiles.length,
       rappels_internes: adminReminders.length,
       lignes_comptables: accountingRows.length,
@@ -6638,6 +8669,11 @@ function exportAllDataBackup() {
       produits: getOrderSummary(order),
       total_oeufs: getOrderEggs(order),
       montant_eur: getOrderRevenue(order),
+      acompte_eur: 0,
+      paye_eur: order.status === "Livrée" ? getOrderRevenue(order) : 0,
+      reste_a_payer_eur: order.status === "Livrée" ? 0 : getOrderRevenue(order),
+      paiement: order.status === "Livrée" ? "Paiement reçu" : "À suivre",
+      moyen_paiement: "Non renseigné",
       statut: order.status,
       archive: Boolean(order.archived_at),
       cree_le: order.created_at,
@@ -6666,6 +8702,7 @@ function exportAllDataBackup() {
       notes: booking.notes,
       montant_eur: getEducationBookingAmount(booking),
       acompte_eur: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).deposit,
+      paye_eur: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).paidAmount,
       reste_a_payer_eur: getBookingPaymentSummary(booking, getEducationBookingAmount(booking)).remaining,
       paiement_recu: booking.payment_received === true,
       moyen_paiement: booking.payment_method || "Non renseigné",
@@ -6687,11 +8724,14 @@ function exportAllDataBackup() {
       race: booking.dog?.breed,
       sexe: booking.dog?.sex,
       annee_naissance: booking.dog?.birth_year,
+      puce: booking.dog?.is_microchipped === false ? false : true,
+      numero_puce: booking.dog?.microchip_number || "",
       vaccins_a_jour: booking.dog?.vaccines_up_to_date === true,
       sterilise: booking.dog?.sterilized === true,
       notes: booking.notes || booking.dog?.notes || "",
       montant_eur: getKennelBookingAmount(booking),
       acompte_eur: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).deposit,
+      paye_eur: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).paidAmount,
       reste_a_payer_eur: getBookingPaymentSummary(booking, getKennelBookingAmount(booking)).remaining,
       paiement_recu: booking.payment_received === true,
       moyen_paiement: booking.payment_method || "Non renseigné",
@@ -6700,6 +8740,29 @@ function exportAllDataBackup() {
       archive: Boolean(booking.archived_at),
       cree_le: booking.created_at,
     })),
+    ventes_ponctuelles: occasionalSaleReservations.map((reservation) => {
+      const amount = getOccasionalSaleReservationAmount(reservation);
+      const payment = getOccasionalSalePaymentSummary(reservation, amount);
+
+      return {
+        id: reservation.id,
+        date: reservation.created_at,
+        produit: reservation.item_name,
+        produit_id: reservation.item_id,
+        client: reservation.client_name,
+        email: reservation.client_email,
+        telephone: reservation.phone,
+        quantite: reservation.quantity,
+        montant_eur: amount,
+        acompte_eur: payment.deposit,
+        paye_eur: payment.paidAmount,
+        reste_a_payer_eur: payment.remaining,
+        paiement: payment.label,
+        moyen_paiement: payment.method,
+        statut: reservation.status || "Nouvelle",
+        message: reservation.notes || "",
+      };
+    }),
     fiches_chiens: kennelDogProfiles.map((profile) => ({
       id: profile.dog?.id || profile.id,
       nom: profile.dog?.name,
@@ -6707,6 +8770,8 @@ function exportAllDataBackup() {
       race: profile.dog?.breed,
       sexe: profile.dog?.sex,
       annee_naissance: profile.dog?.birth_year,
+      puce: profile.dog?.is_microchipped === false ? false : true,
+      numero_puce: profile.dog?.microchip_number || "",
       vaccins_a_jour: profile.dog?.vaccines_up_to_date === true,
       sterilise: profile.dog?.sterilized === true,
       alimentation: profile.dog?.food_notes || "",
@@ -6733,6 +8798,8 @@ function exportAllDataBackup() {
       detail: row.detail,
       montant_eur: row.amount,
       type_montant: row.amountSource,
+      acompte_eur: row.depositAmount,
+      paye_eur: row.paidAmount,
       paiement: row.paymentLabel,
       reste_a_payer_eur: row.paymentRemaining,
       moyen_paiement: row.paymentMethod,
@@ -6829,11 +8896,11 @@ function getDeliveryDateBadge(value) {
 
 function printPreparationSheet() {
   if (!routeDate) {
-    showToast("Choisis une date de livraison pour imprimer la feuille de route.");
+    showToast("Choisissez une date de livraison pour imprimer la feuille de route.");
     return;
   }
 
-  const routeOrders = filteredOrders.filter((order) => order.date === routeDate);
+  const routeOrders = getOptimizedDeliveryOrders(filteredOrders.filter((order) => order.date === routeDate));
 
   if (routeOrders.length === 0) {
     showToast("Aucune commande affichée pour cette date de livraison.");
@@ -6849,8 +8916,9 @@ function printPreparationSheet() {
   );
   const rows = routeOrders
     .map(
-      (order) => `
+      (order, index) => `
         <tr>
+          <td>${index + 1}</td>
           <td>${escapeHtml(order.client)}</td>
           <td>${escapeHtml(order.date)}</td>
           <td>${escapeHtml(order.address)}</td>
@@ -6896,6 +8964,7 @@ function printPreparationSheet() {
         <table>
           <thead>
             <tr>
+              <th>Étape</th>
               <th>Client</th>
               <th>Date</th>
               <th>Adresse</th>
@@ -6913,6 +8982,121 @@ function printPreparationSheet() {
   printWindow.document.close();
   printWindow.focus();
   printWindow.print();
+}
+
+function getDeliveryMapOrders(date = routeDate) {
+  return getOptimizedDeliveryOrders(
+    orders.filter(
+      (order) =>
+        !order.archived_at &&
+        order.status !== "Annulée" &&
+        order.date === date &&
+        String(order.address || "").trim()
+    )
+  );
+}
+
+function normalizeRouteAddressPart(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getDeliveryRouteSortParts(order) {
+  const address = normalizeRouteAddressPart(order.address);
+  const postalCode = address.match(/\b\d{5}\b/)?.[0] || "99999";
+  const streetNumber = Number(address.match(/^\s*(\d+)/)?.[1] || 99999);
+  const withoutPostalCode = address.replace(/\b\d{5}\b/g, " ");
+  const cityPart = address.includes(postalCode)
+    ? normalizeRouteAddressPart(address.slice(address.indexOf(postalCode) + postalCode.length))
+    : "";
+  const streetPart = normalizeRouteAddressPart(
+    withoutPostalCode
+      .replace(/^\d+\s*/, "")
+      .replace(/\b(rue|route|chemin|impasse|allee|avenue|boulevard|place|lieu dit|ld)\b/g, "")
+  );
+
+  return {
+    postalCode,
+    cityPart,
+    streetPart,
+    streetNumber,
+    client: normalizeRouteAddressPart(order.client),
+  };
+}
+
+function getOptimizedDeliveryOrders(routeOrders) {
+  return [...routeOrders].sort((a, b) => {
+    const left = getDeliveryRouteSortParts(a);
+    const right = getDeliveryRouteSortParts(b);
+    const textCompare =
+      left.postalCode.localeCompare(right.postalCode) ||
+      left.cityPart.localeCompare(right.cityPart) ||
+      left.streetPart.localeCompare(right.streetPart);
+
+    if (textCompare !== 0) {
+      return textCompare;
+    }
+
+    return left.streetNumber - right.streetNumber || left.client.localeCompare(right.client);
+  });
+}
+
+function openOrderAddressMap(order) {
+  const address = String(order?.address || "").trim();
+
+  if (!address) {
+    showToast("Adresse non renseignée pour cette commande.");
+    return;
+  }
+
+  window.open(
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}
+
+function openDeliveryRouteMap(date = routeDate) {
+  if (!date) {
+    showToast("Choisissez une date de livraison pour ouvrir la carte.");
+    return;
+  }
+
+  const routeOrders = getDeliveryMapOrders(date);
+
+  if (routeOrders.length === 0) {
+    showToast("Aucune adresse de livraison disponible pour cette date.");
+    return;
+  }
+
+  if (routeOrders.length === 1) {
+    openOrderAddressMap(routeOrders[0]);
+    return;
+  }
+
+  const addresses = routeOrders.slice(0, 10).map((order) => order.address.trim());
+  const destination = addresses[addresses.length - 1];
+  const waypoints = addresses.slice(0, -1);
+  const url = new URL("https://www.google.com/maps/dir/");
+
+  url.searchParams.set("api", "1");
+  url.searchParams.set("travelmode", "driving");
+  url.searchParams.set("destination", destination);
+
+  if (waypoints.length > 0) {
+    url.searchParams.set("waypoints", waypoints.join("|"));
+  }
+
+  window.open(url.toString(), "_blank", "noopener,noreferrer");
+
+  if (routeOrders.length > 10) {
+    showToast("Google Maps limite la tournée automatique : les 10 premières adresses ont été envoyées.");
+  }
 }
 
 function openHomeFeaturedEventTarget() {
@@ -7144,6 +9328,10 @@ function openTutorialFromPage(guideId) {
                   <button onClick={goToMyOrders} className="app-nav__button">
                     <UserRound size={17} />
                     Mon compte
+                  </button>
+                  <button onClick={goToMyReservations} className="app-nav__button">
+                    <CalendarCheck size={17} />
+                    Mes demandes
                   </button>
                   <button onClick={goToProfile} className="app-nav__button">
                     <UserRound size={17} />
@@ -7520,6 +9708,17 @@ function openTutorialFromPage(guideId) {
                   </time>
                   <h2>{activeHomeNews.title}</h2>
                   <p>{activeHomeNews.text}</p>
+                  {parseGalleryImages(activeHomeNews.gallery_images).length > 0 && (
+                    <div className="home-news__gallery" aria-label="Photos secondaires de l'actualité">
+                      {parseGalleryImages(activeHomeNews.gallery_images).slice(0, 4).map((imageUrl, index) => (
+                        <img
+                          key={`${imageUrl}-${index}`}
+                          src={imageUrl}
+                          alt={`${activeHomeNews.title} ${index + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
                   {homeNewsItems.length > 1 && (
                     <div className="home-news__controls" aria-label="Choisir une actualité">
                       {homeNewsItems.map((item, index) => (
@@ -7533,6 +9732,127 @@ function openTutorialFromPage(guideId) {
                       ))}
                     </div>
                   )}
+                </div>
+              </section>
+            )}
+
+            {occasionalSalesContent.enabled && activeOccasionalSaleItems.length > 0 && (
+              <section className="home-occasional-sales" aria-label="Ventes ponctuelles">
+                <div className="home-occasional-sales__media">
+                  <img
+                    src={occasionalSalesContent.image_url || activeOccasionalSaleItems[0]?.image_url || "/images/marais.jpg"}
+                    alt={occasionalSalesContent.title || "Ventes ponctuelles"}
+                    loading="lazy"
+                  />
+                </div>
+                <div className="home-occasional-sales__content">
+                  <p className="shop-eyebrow">{occasionalSalesContent.eyebrow || "Vente ponctuelle"}</p>
+                  <h2>{occasionalSalesContent.title || "Réservations du moment"}</h2>
+                  <p>{occasionalSalesContent.text}</p>
+
+                  <div className="home-occasional-sales__items">
+                    {activeOccasionalSaleItems.map((item) => {
+                      const availableQuantity = getOccasionalSaleAvailableQuantity(item);
+                      const isComplete = isOccasionalSaleItemComplete(item);
+
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={[
+                            occasionalSaleReservationForm.itemId === item.id ? "is-selected" : "",
+                            isComplete ? "is-complete" : "",
+                          ].filter(Boolean).join(" ")}
+                          disabled={isComplete}
+                          onClick={() => setOccasionalSaleReservationForm({ ...occasionalSaleReservationForm, itemId: item.id })}
+                        >
+                          {item.image_url && <img src={item.image_url} alt={item.name} />}
+                          <span>{item.name}</span>
+                          <strong>
+                            {[item.price ? `${item.price} EUR` : "", item.unit_label ? `/${item.unit_label}` : ""].filter(Boolean).join(" ")}
+                          </strong>
+                          {isComplete ? (
+                            <em>Complet</em>
+                          ) : availableQuantity !== null ? (
+                            <em>{availableQuantity} disponible{availableQuantity > 1 ? "s" : ""}</em>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {occasionalSalesContent.notice_text && (
+                    <aside className="home-occasional-sales__notice">
+                      <strong>À prévoir</strong>
+                      <p>{occasionalSalesContent.notice_text}</p>
+                    </aside>
+                  )}
+
+                  <form className="home-occasional-sales__form" onSubmit={submitOccasionalSaleReservation}>
+                    <div className="home-occasional-sales__form-head">
+                      <strong>Votre réservation</strong>
+                      <span>Indiquez vos coordonnées, nous vous recontacterons pour confirmer.</span>
+                    </div>
+                    <label>
+                      <span>Quantité</span>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        max={getOccasionalSaleAvailableQuantity(activeOccasionalSaleItems.find((item) => item.id === occasionalSaleReservationForm.itemId)) || undefined}
+                        value={occasionalSaleReservationForm.quantity}
+                        onChange={(e) => setOccasionalSaleReservationForm({ ...occasionalSaleReservationForm, quantity: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Nom</span>
+                      <input
+                        required
+                        value={occasionalSaleReservationForm.fullName}
+                        onChange={(e) => setOccasionalSaleReservationForm({ ...occasionalSaleReservationForm, fullName: e.target.value })}
+                        placeholder="Votre nom"
+                      />
+                    </label>
+                    <label>
+                      <span>Téléphone</span>
+                      <input
+                        required
+                        type="tel"
+                        value={occasionalSaleReservationForm.phone}
+                        onChange={(e) => setOccasionalSaleReservationForm({ ...occasionalSaleReservationForm, phone: e.target.value })}
+                        placeholder="06..."
+                      />
+                    </label>
+                    <label>
+                      <span>Email</span>
+                      <input
+                        required
+                        type="email"
+                        value={occasionalSaleReservationForm.email}
+                        onChange={(e) => setOccasionalSaleReservationForm({ ...occasionalSaleReservationForm, email: e.target.value })}
+                        placeholder="votre@email.fr"
+                      />
+                    </label>
+                    <label className="home-occasional-sales__wide">
+                      <span>Message</span>
+                      <textarea
+                        value={occasionalSaleReservationForm.notes}
+                        onChange={(e) => setOccasionalSaleReservationForm({ ...occasionalSaleReservationForm, notes: e.target.value })}
+                        placeholder="Précision éventuelle"
+                        rows="2"
+                      />
+                    </label>
+                    {isOccasionalSaleItemComplete(activeOccasionalSaleItems.find((item) => item.id === occasionalSaleReservationForm.itemId)) && (
+                      <p className="home-occasional-sales__complete-message">Cette vente est complète pour le moment.</p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={isOccasionalSaleItemComplete(activeOccasionalSaleItems.find((item) => item.id === occasionalSaleReservationForm.itemId))}
+                    >
+                      <ShoppingBasket size={18} />
+                      Réserver
+                    </button>
+                  </form>
                 </div>
               </section>
             )}
@@ -7573,7 +9893,7 @@ function openTutorialFromPage(guideId) {
               <div className="home-guides__header">
                 <p className="shop-eyebrow">Guides pratiques</p>
                 <h2>Besoin d'un coup de main ?</h2>
-                <p>Ces trois tutoriels sont consultables avant toute connexion au site.</p>
+                <p>Ces tutoriels sont consultables avant toute connexion au site.</p>
               </div>
               <div className="home-guides__grid">
                 <button
@@ -7615,6 +9935,20 @@ function openTutorialFromPage(guideId) {
                   <span>
                     <strong>Réserver une activité</strong>
                     <small>Choisir l'activité, le créneau et indiquer les participants.</small>
+                  </span>
+                  <Download size={20} />
+                </button>
+                <button
+                  type="button"
+                  className="home-guide-card"
+                  onClick={(event) => openTutorialGuide(event, "install", "Installer application")}
+                >
+                  <span className="home-guide-card__icon home-guide-card__icon--app">
+                    <Smartphone size={27} strokeWidth={2.1} />
+                  </span>
+                  <span>
+                    <strong>Installer l'appli</strong>
+                    <small>Ajouter l'icône sur iPhone ou Android en quelques gestes.</small>
                   </span>
                   <Download size={20} />
                 </button>
@@ -7754,7 +10088,7 @@ function openTutorialFromPage(guideId) {
                 <p><strong>Forme juridique :</strong> Micro BA</p>
                 <p><strong>Responsable de publication :</strong> Marie Auguste</p>
                 <p><strong>Adresse professionnelle :</strong> 61 Les Ruelles, 44580 Bourneuf-en-Retz</p>
-                <p><strong>SIRET :</strong> 8943132800013</p>
+                <p><strong>SIRET :</strong> 89493132800013</p>
                 <p><strong>RCS / RM :</strong> Non concerné</p>
               </article>
               <article>
@@ -8164,10 +10498,16 @@ function openTutorialFromPage(guideId) {
                 )}
               </div>
 
-              {isBirthdayEducationActivity ? (
+              {!isLogged ? (
+                <ReservationAccountGate
+                  subject={isBirthdayEducationActivity ? "un anniversaire" : "une activité"}
+                  onLogin={() => setScreen("login")}
+                  onRegister={() => setScreen("register")}
+                />
+              ) : isBirthdayEducationActivity ? (
               <form className="service-form birthday-form" onSubmit={requestBirthdayBooking}>
                 <h2>Demande d'anniversaire</h2>
-                {!isLogged && <p className="login-note">Connecte-toi ou crée un compte pour envoyer une demande d'anniversaire.</p>}
+                {!isLogged && <p className="login-note">Connectez-vous ou créez un compte pour envoyer une demande d'anniversaire.</p>}
                 <p className="login-note">
                   Pour les anniversaires, envoyez une demande personnalisée : nous reviendrons vers vous pour organiser le moment ensemble.
                 </p>
@@ -8242,7 +10582,7 @@ function openTutorialFromPage(guideId) {
               ) : (
               <form className="service-form" onSubmit={requestEducationBooking}>
                 <h2>Demande de réservation</h2>
-                {!isLogged && <p className="login-note">Connecte-toi ou crée un compte pour envoyer une demande.</p>}
+                {!isLogged && <p className="login-note">Connectez-vous ou créez un compte pour envoyer une demande.</p>}
 
                 <label>
                   <span>Activité</span>
@@ -8459,7 +10799,7 @@ function openTutorialFromPage(guideId) {
                       <button
                         key={`kennel-calendar-${day.date}`}
                         type="button"
-                        className={`client-calendar__day ${day.inMonth ? "" : "is-muted"} ${day.available ? "is-available" : ""} ${day.isNearlyFull && day.available ? "is-nearly-full" : ""} ${day.blockedDate ? "is-blocked" : ""} ${day.isFull ? "is-full" : ""} ${[kennelBookingForm.startDate, kennelBookingForm.endDate].includes(day.date) ? "is-selected" : ""}`}
+                        className={`client-calendar__day ${day.inMonth ? "" : "is-muted"} ${day.available ? "is-available" : ""} ${day.isNearlyFull && day.available ? "is-nearly-full" : ""} ${day.blockedDate ? "is-blocked" : ""} ${day.isFull ? "is-full" : ""} ${selectedKennelCalendarDates.includes(day.date) ? "is-selected" : ""}`}
                         onClick={() => selectKennelCalendarDay(day)}
                         disabled={!day.available}
                       >
@@ -8476,13 +10816,20 @@ function openTutorialFromPage(guideId) {
                       </button>
                     ))}
                   </div>
-                  <p className="client-calendar__note">Touchez une première date pour l'arrivée, puis une deuxième pour le départ.</p>
+                  <p className="client-calendar__note">Touchez une première date pour l'arrivée, puis la même date ou une deuxième date pour le départ.</p>
                 </div>
               </div>
 
+              {!isLogged ? (
+                <ReservationAccountGate
+                  subject="un séjour en pension"
+                  onLogin={() => setScreen("login")}
+                  onRegister={() => setScreen("register")}
+                />
+              ) : (
               <form className="service-form" onSubmit={requestKennelBooking}>
                 <h2>Demande de pension</h2>
-                {!isLogged && <p className="login-note">Connecte-toi ou crée un compte pour envoyer une demande.</p>}
+                {!isLogged && <p className="login-note">Connectez-vous ou créez un compte pour envoyer une demande.</p>}
                 <p className="login-note">
                   Le chien doit être sociable avec ses congénères. Une pré-visite à la pension canine sera organisée avant le séjour.
                 </p>
@@ -8508,12 +10855,44 @@ function openTutorialFromPage(guideId) {
                   </label>
                 </div>
 
+                {selectedKennelBookingDays > 0 && (
+                  <aside className="kennel-price-preview">
+                    <strong>
+                      {selectedKennelBookingDays} jour{selectedKennelBookingDays > 1 ? "s" : ""} réservé{selectedKennelBookingDays > 1 ? "s" : ""}
+                    </strong>
+                    <span>
+                      Montant estimé : {selectedKennelEstimatedAmount.toFixed(2)} EUR
+                      {kennelDailyService?.price ? ` (${Number(kennelDailyService.price).toFixed(2)} EUR / jour)` : ""}
+                    </span>
+                  </aside>
+                )}
+
                 <label>
                   <span>Téléphone</span>
                   <input
                     value={kennelBookingForm.phone}
                     onChange={(e) => setKennelBookingForm({ ...kennelBookingForm, phone: e.target.value })}
                     placeholder="Numéro de contact"
+                  />
+                </label>
+
+                <label>
+                  <span>Assurance du propriétaire *</span>
+                  <input
+                    value={kennelBookingForm.ownerInsurance}
+                    onChange={(e) => setKennelBookingForm({ ...kennelBookingForm, ownerInsurance: e.target.value })}
+                    placeholder="Nom de votre compagnie d'assurance"
+                    required
+                  />
+                </label>
+
+                <label>
+                  <span>Vétérinaire habituel *</span>
+                  <input
+                    value={kennelBookingForm.veterinarianName}
+                    onChange={(e) => setKennelBookingForm({ ...kennelBookingForm, veterinarianName: e.target.value })}
+                    placeholder="Nom du vétérinaire ou de la clinique"
+                    required
                   />
                 </label>
 
@@ -8569,6 +10948,32 @@ function openTutorialFromPage(guideId) {
                   </label>
                 </div>
 
+                <div className="service-form__grid">
+                  <label>
+                    <span>Numero de puce *</span>
+                    <input
+                      value={kennelBookingForm.dogMicrochipNumber}
+                      disabled={kennelBookingForm.dogNotMicrochipped}
+                      onChange={(e) => setKennelBookingForm({ ...kennelBookingForm, dogMicrochipNumber: e.target.value })}
+                      placeholder="Ex. 250269..."
+                    />
+                  </label>
+                  <label className="service-checkbox service-checkbox--inline">
+                    <input
+                      type="checkbox"
+                      checked={kennelBookingForm.dogNotMicrochipped}
+                      onChange={(e) =>
+                        setKennelBookingForm({
+                          ...kennelBookingForm,
+                          dogNotMicrochipped: e.target.checked,
+                          dogMicrochipNumber: e.target.checked ? "" : kennelBookingForm.dogMicrochipNumber,
+                        })
+                      }
+                    />
+                    <span>Le chien n'est pas puce</span>
+                  </label>
+                </div>
+
                 <div className="service-checkbox-grid">
                   <label className="service-checkbox">
                     <input
@@ -8589,6 +10994,29 @@ function openTutorialFromPage(guideId) {
                   </label>
                 </div>
 
+                <fieldset className="kennel-photo-consent">
+                  <legend>Photos et vidéos du chien *</legend>
+                  <p>Choisissez si vous autorisez la pension à publier des photos ou vidéos de votre chien sur son site et ses réseaux sociaux.</p>
+                  <label className="service-checkbox">
+                    <input
+                      type="radio"
+                      name="kennel-photo-consent"
+                      checked={kennelBookingForm.photoConsent === "yes"}
+                      onChange={() => setKennelBookingForm({ ...kennelBookingForm, photoConsent: "yes" })}
+                    />
+                    <span>J'autorise leur utilisation</span>
+                  </label>
+                  <label className="service-checkbox">
+                    <input
+                      type="radio"
+                      name="kennel-photo-consent"
+                      checked={kennelBookingForm.photoConsent === "no"}
+                      onChange={() => setKennelBookingForm({ ...kennelBookingForm, photoConsent: "no" })}
+                    />
+                    <span>Je refuse leur utilisation</span>
+                  </label>
+                </fieldset>
+
                 <label>
                   <span>Habitudes et précisions</span>
                   <textarea
@@ -8603,6 +11031,7 @@ function openTutorialFromPage(guideId) {
                   Envoyer la demande
                 </button>
               </form>
+              )}
             </div>
           </section>
         )}
@@ -8797,12 +11226,13 @@ function openTutorialFromPage(guideId) {
                         <MapPin size={19} />
                         <textarea
                           value={form.deliveryAddress}
-                          onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })}
-                          placeholder="Adresse complète, lieu de dépôt..."
+                          onChange={(e) => updateDeliveryAddress("register", e.target.value)}
+                          placeholder="Tapez votre adresse puis choisissez une proposition"
                           rows="3"
                           required
                         />
                       </div>
+                      {renderAddressSuggestions("register")}
                     </label>
                     <label className="auth-field">
                       <span>Téléphone</span>
@@ -9089,9 +11519,9 @@ function openTutorialFromPage(guideId) {
                   type="button"
                   onClick={isLogged ? placeOrder : () => setScreen("register")}
                   className="order-submit"
-                  disabled={isLogged && !canOrderEggs && !isAdmin}
+                  disabled={(isLogged && !canOrderEggs && !isAdmin) || isPlacingOrder}
                 >
-                  {isLogged ? "Valider ma commande" : "Créer mon compte"}
+                  {isPlacingOrder ? "Commande en cours..." : isLogged ? "Valider ma commande" : "Créer mon compte"}
                 </button>
               </aside>
             </div>
@@ -9111,6 +11541,14 @@ function openTutorialFromPage(guideId) {
                 Elle apparaît maintenant dans votre espace client. Vous pourrez y suivre
                 son statut jusqu’à la préparation.
               </p>
+
+              <div className="confirmation-alert" role="status">
+                <CheckCircle2 size={28} />
+                <div>
+                  <strong>Commande bien prise en compte</strong>
+                  <span>Inutile de la repasser : elle est enregistrée et visible dans “Mes commandes”.</span>
+                </div>
+              </div>
 
               <div className="confirmation-steps" aria-label="Étapes de commande">
                 <div className="is-done">
@@ -9218,8 +11656,8 @@ function openTutorialFromPage(guideId) {
                 <span>
                   <CalendarCheck size={24} />
                 </span>
-                <strong>Mes réservations</strong>
-                <em>{clientAccountEducationBookings.length + clientAccountKennelBookings.length} réservation{clientAccountEducationBookings.length + clientAccountKennelBookings.length > 1 ? "s" : ""}</em>
+                <strong>Mes demandes</strong>
+                <em>{clientDemandCount} demande{clientDemandCount > 1 ? "s" : ""}</em>
                 <ChevronRight size={20} />
               </button>
               <button type="button" onClick={() => setScreen("kennel")}>
@@ -9252,6 +11690,10 @@ function openTutorialFromPage(guideId) {
               <article>
                 <span>Séjours pension</span>
                 <strong>{clientAccountKennelBookings.length}</strong>
+              </article>
+              <article>
+                <span>Ventes ponctuelles</span>
+                <strong>{clientAccountOccasionalSales.length}</strong>
               </article>
               <article>
                 <span>Chiens</span>
@@ -9300,20 +11742,34 @@ function openTutorialFromPage(guideId) {
                   </div>
                 </div>
                 <div className="client-account-list">
-                  {myOrders.slice(0, 6).map((o) => (
-                    <article key={o.id}>
-                      <strong>Commande du {formatDeliveryDate(o.delivery_date)}</strong>
-                      <span>{getOrderSummary(o)}</span>
-                      <em>{getOrderEggs(o)} œufs - {o.status}</em>
-                      <div className="client-order-progress" data-step={getOrderStatusStep(o.status)}>
-                        {["Envoyée", "Préparation", "Prête", "Livrée"].map((step, index) => (
-                          <span key={step} className={getOrderStatusStep(o.status) >= index ? "is-active" : ""}>
-                            {step}
-                          </span>
-                        ))}
-                      </div>
-                    </article>
-                  ))}
+                  {myOrders.slice(0, 6).map((o) => {
+                    const cancelInfo = getClientOrderCancelInfo(o);
+
+                    return (
+                      <article key={o.id}>
+                        <strong>Commande du {formatDeliveryDate(o.delivery_date)}</strong>
+                        <span>{getOrderSummary(o)}</span>
+                        <em>{getOrderEggs(o)} œufs - {o.status}</em>
+                        <div className="client-order-progress" data-step={getOrderStatusStep(o.status)}>
+                          {["Envoyée", "Préparation", "Prête", "Livrée"].map((step, index) => (
+                            <span key={step} className={getOrderStatusStep(o.status) >= index ? "is-active" : ""}>
+                              {step}
+                            </span>
+                          ))}
+                        </div>
+                        {cancelInfo.canCancel ? (
+                          <div className="client-order-actions">
+                            <p>Annulation possible jusqu'à {formatCreatedAtDateTime(cancelInfo.expiresAt)}.</p>
+                            <button type="button" onClick={() => cancelMyOrder(o)}>
+                              Annuler ma commande
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="client-order-cancel-note">{cancelInfo.reason}</p>
+                        )}
+                      </article>
+                    );
+                  })}
                   {myOrders.length === 0 && <p>Aucune commande pour le moment.</p>}
                 </div>
               </section>
@@ -9349,12 +11805,45 @@ function openTutorialFromPage(guideId) {
                 <div className="client-account-list">
                   {clientAccountKennelBookings.slice(0, 6).map((booking) => (
                     <article key={booking.id}>
-                      <strong>{booking.dog?.name || "Chien"} - {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
-                      <span>{booking.phone || "Téléphone non renseigné"}</span>
-                      <em>{booking.status || "Demandée"}</em>
+                      <div>
+                        <strong>{booking.dog?.name || "Chien"} - {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
+                        <span>{booking.phone || "Téléphone non renseigné"}</span>
+                        <em>{booking.status || "Demandée"}</em>
+                      </div>
+                      {kennelContracts.some((contract) => contract.booking_id === booking.id) ? (
+                        <button type="button" className="contract-access-button is-signed" onClick={() => setSelectedContractBooking(booking)}>
+                          <CheckCircle2 size={17} /> Voir le contrat signé
+                        </button>
+                      ) : String(booking.status || "").toLowerCase().startsWith("confirm") ? (
+                        <button type="button" className="contract-access-button" onClick={() => setSelectedContractBooking(booking)}>
+                          Signer le contrat
+                        </button>
+                      ) : (
+                        <span className="contract-waiting-label">Contrat disponible après confirmation</span>
+                      )}
                     </article>
                   ))}
                   {clientAccountKennelBookings.length === 0 && <p>Aucun séjour pension.</p>}
+                </div>
+              </section>
+
+              <section className="client-account-card">
+                <div className="client-account-title">
+                  <span><ShoppingBasket size={22} /></span>
+                  <div>
+                    <h2>Mes ventes ponctuelles</h2>
+                    <p>Poules de réforme, jus de pomme et ventes du moment.</p>
+                  </div>
+                </div>
+                <div className="client-account-list">
+                  {clientAccountOccasionalSales.slice(0, 6).map((reservation) => (
+                    <article key={reservation.id}>
+                      <strong>{reservation.quantity} x {reservation.item_name}</strong>
+                      <span>{formatCreatedAtDateTime(reservation.created_at)}</span>
+                      <em>{reservation.status || "Nouvelle"}</em>
+                    </article>
+                  ))}
+                  {clientAccountOccasionalSales.length === 0 && <p>Aucune vente ponctuelle réservée.</p>}
                 </div>
               </section>
 
@@ -9389,13 +11878,16 @@ function openTutorialFromPage(guideId) {
             <div className="orders-header">
               <div>
                 <p className="shop-eyebrow">Espace client</p>
-                <h1>Mes réservations</h1>
-                <p>Retrouvez vos demandes ferme pédagogique et pension canine au même endroit.</p>
+                <h1>Mes demandes</h1>
+                <p>Retrouvez vos commandes d'œufs, réservations ferme, séjours pension et ventes ponctuelles au même endroit.</p>
               </div>
 
               <div className="profile-actions">
                 <button type="button" onClick={goToMyOrders} className="secondary-action">
                   Retour mon compte
+                </button>
+                <button type="button" onClick={() => setScreen("shop")} className="secondary-action">
+                  Commander des œufs
                 </button>
                 <button type="button" onClick={() => setScreen("education")} className="secondary-action">
                   Réserver ferme
@@ -9408,6 +11900,28 @@ function openTutorialFromPage(guideId) {
             </div>
 
             <div className="client-reservations-grid">
+              <section className="client-account-card">
+                <div className="client-account-title">
+                  <span><ShoppingBasket size={22} /></span>
+                  <div>
+                    <h2>Commandes d'œufs</h2>
+                    <p>{myOrders.length} commande{myOrders.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+                <div className="client-account-list client-reservation-list">
+                  {myOrders.map((order) => (
+                    <article key={order.id}>
+                      <strong>Commande du {formatDeliveryDate(order.delivery_date)}</strong>
+                      <span>{getOrderSummary(order)}</span>
+                      <em>{normalizeOrderStatus(order.status || "À préparer")}</em>
+                    </article>
+                  ))}
+                  {myOrders.length === 0 && (
+                    <p>Aucune commande d'œufs pour le moment.</p>
+                  )}
+                </div>
+              </section>
+
               <section className="client-account-card">
                 <div className="client-account-title">
                   <span><School size={22} /></span>
@@ -9441,13 +11955,48 @@ function openTutorialFromPage(guideId) {
                 <div className="client-account-list client-reservation-list">
                   {clientAccountKennelBookings.map((booking) => (
                     <article key={booking.id}>
-                      <strong>{booking.dog?.name || "Chien"} - {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
-                      <span>{booking.phone || "Téléphone non renseigné"}</span>
-                      <em>{booking.status || "Demandée"}</em>
+                      <div>
+                        <strong>{booking.dog?.name || "Chien"} - {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
+                        <span>{booking.phone || "Téléphone non renseigné"}</span>
+                        <em>{booking.status || "Demandée"}</em>
+                      </div>
+                      {kennelContracts.some((contract) => contract.booking_id === booking.id) ? (
+                        <button type="button" className="contract-access-button is-signed" onClick={() => setSelectedContractBooking(booking)}>
+                          <CheckCircle2 size={17} /> Voir le contrat signé
+                        </button>
+                      ) : String(booking.status || "").toLowerCase().startsWith("confirm") ? (
+                        <button type="button" className="contract-access-button" onClick={() => setSelectedContractBooking(booking)}>
+                          Signer le contrat
+                        </button>
+                      ) : (
+                        <span className="contract-waiting-label">Contrat disponible après confirmation</span>
+                      )}
                     </article>
                   ))}
                   {clientAccountKennelBookings.length === 0 && (
                     <p>Aucun séjour pension canine pour le moment.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="client-account-card">
+                <div className="client-account-title">
+                  <span><ShoppingBasket size={22} /></span>
+                  <div>
+                    <h2>Ventes ponctuelles</h2>
+                    <p>{clientAccountOccasionalSales.length} demande{clientAccountOccasionalSales.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+                <div className="client-account-list client-reservation-list">
+                  {clientAccountOccasionalSales.map((reservation) => (
+                    <article key={reservation.id}>
+                      <strong>{reservation.quantity} x {reservation.item_name}</strong>
+                      <span>{formatCreatedAtDateTime(reservation.created_at)}</span>
+                      <em>{reservation.status || "Nouvelle"}</em>
+                    </article>
+                  ))}
+                  {clientAccountOccasionalSales.length === 0 && (
+                    <p>Aucune vente ponctuelle réservée pour le moment.</p>
                   )}
                 </div>
               </section>
@@ -9500,11 +12049,12 @@ function openTutorialFromPage(guideId) {
                   <MapPin size={19} />
                   <textarea
                     value={profileForm.deliveryAddress}
-                    onChange={(e) => setProfileForm({ ...profileForm, deliveryAddress: e.target.value })}
-                    placeholder="Adresse complète, lieu de dépôt..."
+                    onChange={(e) => updateDeliveryAddress("profile", e.target.value)}
+                    placeholder="Tapez votre adresse puis choisissez une proposition"
                     rows="4"
                   />
                 </div>
+                {renderAddressSuggestions("profile")}
               </label>
 
               <div className="profile-actions">
@@ -9548,7 +12098,21 @@ function openTutorialFromPage(guideId) {
                   onClick={testAdminPushNotification}
                   className="secondary-action"
                 >
-                  Tester notification
+                  Test commande
+                </button>
+                <button
+                  type="button"
+                  onClick={testAdminEducationPushNotification}
+                  className="secondary-action"
+                >
+                  Test ferme
+                </button>
+                <button
+                  type="button"
+                  onClick={testAdminKennelPushNotification}
+                  className="secondary-action"
+                >
+                  Test pension
                 </button>
                 <button
                   type="button"
@@ -9588,9 +12152,12 @@ function openTutorialFromPage(guideId) {
                     await loadAboutContent();
                     await loadHomeFeaturedEvent();
                     await loadHomeNews();
+                    await loadOccasionalSalesContent();
+                    await loadOccasionalSaleReservations();
                     await loadKennelContent();
                     await loadAppSettings();
                     await loadTrafficEvents();
+                    await loadEggProductionLogs();
                   }}
                   className="secondary-action"
                 >
@@ -9605,6 +12172,40 @@ function openTutorialFromPage(guideId) {
                 </button>
               </div>
             </div>
+
+            {kennelPaymentFollowups.length > 0 && (
+              <section className="admin-payment-alert-banner" aria-label="Rappel paiements pension impayés">
+                <div className="admin-payment-alert-banner__icon">
+                  <AlertTriangle size={30} />
+                </div>
+                <div>
+                  <span>Rappel impayés pension</span>
+                  <strong>
+                    {kennelPaymentFollowups.length} séjour{kennelPaymentFollowups.length > 1 ? "s" : ""} à relancer - {kennelPaymentFollowupTotal.toFixed(2)} EUR restant{kennelPaymentFollowupTotal > 1 ? "s" : ""}
+                  </strong>
+                  <p>
+                    Cette bannière reste visible chaque jour dans l'admin tant que le paiement n'est pas coché comme reçu.
+                  </p>
+                </div>
+                <ul>
+                  {kennelPaymentFollowups.slice(0, 3).map(({ booking, remaining }) => (
+                    <li key={`admin-payment-banner-${booking.id}`}>
+                      <b>{booking.client_name || "Client"}</b>
+                      <span>{booking.dog?.name || "Chien"} - {remaining.toFixed(2)} EUR</span>
+                    </li>
+                  ))}
+                  {kennelPaymentFollowups.length > 3 && (
+                    <li>
+                      <b>Et {kennelPaymentFollowups.length - 3} autre{kennelPaymentFollowups.length - 3 > 1 ? "s" : ""}</b>
+                      <span>À voir dans le suivi</span>
+                    </li>
+                  )}
+                </ul>
+                <button type="button" onClick={() => setAdminView("payments")}>
+                  Voir les paiements
+                </button>
+              </section>
+            )}
 
             <section className="admin-global-search" aria-label="Recherche globale admin">
               <label>
@@ -9643,6 +12244,13 @@ function openTutorialFromPage(guideId) {
                 <ClipboardList size={16} />
                 Assistant
               </button>
+              <button type="button" onClick={() => setAdminView("notifications")}>
+                <BellRing size={16} />
+                Notifs
+                {unreadAdminNotifications.length > 0 && (
+                  <span>{unreadAdminNotifications.length}</span>
+                )}
+              </button>
               <button type="button" onClick={() => setAdminView("today")}>
                 <CalendarDays size={16} />
                 Aujourd'hui
@@ -9654,6 +12262,13 @@ function openTutorialFromPage(guideId) {
               <button type="button" onClick={() => setAdminView("kennel")}>
                 <Dog size={16} />
                 Pension
+              </button>
+              <button type="button" onClick={() => setAdminView("payments")}>
+                <Euro size={16} />
+                Paiements
+                {kennelPaymentFollowups.length > 0 && (
+                  <span>{kennelPaymentFollowups.length}</span>
+                )}
               </button>
               <button type="button" onClick={() => setAdminView("clients")}>
                 <UsersRound size={16} />
@@ -9672,16 +12287,14 @@ function openTutorialFromPage(guideId) {
                   tabs: [
                     { value: "overview", label: "Vue d'ensemble" },
                     { value: "assistant", label: "Assistant" },
+                    { value: "notifications", label: "Notifications" },
                     { value: "today", label: "Planning du jour" },
                     { value: "health", label: "Santé appli" },
                   ],
                 },
                 {
                   title: "Œufs",
-                  tabs: [
-                    { value: "eggs", label: "Commandes" },
-                    { value: "accounting", label: "Comptabilité" },
-                  ],
+                  tabs: [{ value: "eggs", label: "Commandes" }],
                 },
                 {
                   title: "Ferme",
@@ -9707,6 +12320,8 @@ function openTutorialFromPage(guideId) {
                   title: "Communication",
                   tabs: [
                     { value: "announcements", label: "Annonces" },
+                    { value: "featuredEvent", label: "Événement à l'honneur" },
+                    { value: "occasionalSales", label: "Ventes ponctuelles" },
                     { value: "news", label: "Actualités" },
                     { value: "media", label: "Médias" },
                     { value: "content", label: "Présentation" },
@@ -9715,6 +12330,9 @@ function openTutorialFromPage(guideId) {
                 {
                   title: "Suivi",
                   tabs: [
+                    { value: "payments", label: "Paiements" },
+                    { value: "accounting", label: "Comptabilité" },
+                    { value: "cancellations", label: "Annulations" },
                     { value: "statistics", label: "Statistiques" },
                     { value: "traffic", label: "Trafic" },
                     { value: "audit", label: "Journal" },
@@ -9730,12 +12348,27 @@ function openTutorialFromPage(guideId) {
                         key={tab.value}
                         type="button"
                         className={adminView === tab.value ? "is-active" : ""}
-                        onClick={() => setAdminView(tab.value)}
+                        onClick={() => openAdminView(tab.value)}
                       >
                         {tab.label}
                         {tab.value === "overview" && adminUrgentAlertCount > 0 && (
                           <span className={`admin-tab-badge admin-tab-badge--${adminAlertBadgeTone}`}>
                             {adminUrgentAlertCount}
+                          </span>
+                        )}
+                        {tab.value === "notifications" && unreadAdminNotifications.length > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {unreadAdminNotifications.length}
+                          </span>
+                        )}
+                        {tab.value === "payments" && kennelPaymentFollowups.length > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {kennelPaymentFollowups.length}
+                          </span>
+                        )}
+                        {tab.value === "cancellations" && unseenCancelledItems.length > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--warning">
+                            {unseenCancelledItems.length}
                           </span>
                         )}
                         {tab.value === "health" && healthIssueCount > 0 && (
@@ -9856,6 +12489,33 @@ function openTutorialFromPage(guideId) {
               )}
             </section>
 
+            <section className="admin-fast-actions" aria-label="Accueil admin ultra rapide">
+              <div className="admin-fast-actions__header">
+                <div>
+                  <p className="shop-eyebrow">Accueil rapide</p>
+                  <h2>À ouvrir en premier</h2>
+                  <p>Les quatre raccourcis les plus utiles quand vous êtes sur téléphone.</p>
+                </div>
+                <button type="button" onClick={() => setAdminView("today")}>
+                  Planning du jour
+                </button>
+              </div>
+              <div className="admin-fast-actions__grid">
+                {adminFastActions.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className={`admin-fast-action admin-fast-action--${action.tone}`}
+                    onClick={action.action}
+                  >
+                    <span>{action.label}</span>
+                    <strong>{action.count}</strong>
+                    <em>{action.detail}</em>
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <section className={`admin-todo ${adminTodoItems.length === 0 ? "admin-todo--clear" : ""}`} aria-label="Actions à faire maintenant">
               <div className="admin-todo__header">
                 <span>{adminTodoItems.length > 0 ? <ClipboardList size={24} /> : <CheckCircle2 size={24} />}</span>
@@ -9921,9 +12581,83 @@ function openTutorialFromPage(guideId) {
                   <p className="shop-eyebrow">Aujourd'hui</p>
                   <h2>{formatDeliveryDate(todayIso)}</h2>
                 </div>
-                <button type="button" onClick={() => setAdminView("overview")}>
-                  Vue d'ensemble
-                </button>
+                <div className="today-planning__actions">
+                  <button type="button" onClick={() => openDeliveryRouteMap(todayIso)}>
+                    <MapPin size={17} />
+                    Carte du jour
+                  </button>
+                  <button type="button" onClick={() => setAdminView("overview")}>
+                    Vue d'ensemble
+                  </button>
+                </div>
+              </div>
+
+              <div className="mobile-48h-planning">
+                {admin48HourPlanning.map((day) => (
+                  <article key={day.date} className="mobile-48h-card">
+                    <div className="mobile-48h-card__header">
+                      <div>
+                        <span>{day.label}</span>
+                        <strong>{formatDeliveryDate(day.date)}</strong>
+                      </div>
+                      <em>{day.total} action{day.total > 1 ? "s" : ""}</em>
+                    </div>
+                    <div className="mobile-48h-card__stats">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRouteDate(day.date);
+                          setAdminView("eggs");
+                        }}
+                      >
+                        <Egg size={16} />
+                        <span>{day.orders.length}</span>
+                        Commandes
+                      </button>
+                      <button type="button" onClick={() => setAdminView("education")}>
+                        <School size={16} />
+                        <span>{day.educationBookings.length}</span>
+                        Ferme
+                      </button>
+                      <button type="button" onClick={() => setAdminView("kennel")}>
+                        <Dog size={16} />
+                        <span>{day.kennelArrivals.length}/{day.kennelDepartures.length}</span>
+                        Arriv./départs
+                      </button>
+                      <button type="button" onClick={() => setAdminView("assistant")}>
+                        <BellRing size={16} />
+                        <span>{day.reminders.length}</span>
+                        Rappels
+                      </button>
+                      <button type="button" onClick={() => setAdminView("contacts")}>
+                        <Mail size={16} />
+                        <span>{day.messages.length}</span>
+                        Messages
+                      </button>
+                    </div>
+                    <div className="mobile-48h-card__list">
+                      {day.orders.slice(0, 2).map((order) => (
+                        <p key={`48h-order-${day.date}-${order.id}`}>
+                          <strong>{order.client}</strong>
+                          <span>{getOrderSummary(order)}</span>
+                        </p>
+                      ))}
+                      {day.educationBookings.slice(0, 1).map((booking) => (
+                        <p key={`48h-education-${day.date}-${booking.id}`}>
+                          <strong>{booking.activity_type}</strong>
+                          <span>{booking.client_name}</span>
+                        </p>
+                      ))}
+                      {day.kennelArrivals.slice(0, 1).map((booking) => (
+                        <p key={`48h-arrival-${day.date}-${booking.id}`}>
+                          <strong>Arrivée {booking.dog?.name || "chien"}</strong>
+                          <span>{booking.client_name}</span>
+                        </p>
+                      ))}
+                      {day.total === 0 && <p>Aucune action prévue.</p>}
+                    </div>
+                  </article>
+                ))}
               </div>
 
               <div className="today-planning__grid">
@@ -10102,7 +12836,7 @@ function openTutorialFromPage(guideId) {
                       <strong>{formatDeliveryDate(day.date)} - {day.bookings.length}/{KENNEL_MAX_BOOKINGS_PER_NIGHT}</strong>
                     </li>
                   ))}
-                  {fullKennelNights.length === 0 && <li><em>Aucune nuit complète à venir.</em></li>}
+                  {fullKennelNights.length === 0 && <li><em>Aucune journée complète à venir.</em></li>}
                 </ul>
               </article>
 
@@ -10263,6 +12997,262 @@ function openTutorialFromPage(guideId) {
                   <button type="button" onClick={updateStock} className="primary-action">
                     Modifier le stock
                   </button>
+                </div>
+
+                <div className={`egg-stock-forecast ${eggStockForecastHasRisk ? "is-alert" : ""}`}>
+                  <div className="egg-stock-forecast__header">
+                    <div>
+                      <h3>Prévision stock à 7 jours</h3>
+                      <p>
+                        Basée sur le stock actuel, les commandes prévues et la moyenne de ponte récente
+                        {eggProductionRecentLogs.length > 0 ? ` (${eggProductionRecentLogs.length} jour${eggProductionRecentLogs.length > 1 ? "s" : ""})` : ""}.
+                      </p>
+                    </div>
+                    <strong>{eggStockForecastHasRisk ? "Risque de manque" : "Stock OK"}</strong>
+                  </div>
+
+                  <div className="egg-stock-forecast__cards">
+                    <article>
+                      <span>Ponte du jour</span>
+                      <strong>{eggProductionToday || "Non saisie"}</strong>
+                      <em>{eggProductionToday ? "oeufs ramasses" : `estimation ${eggProductionRecentAverage}/jour`}</em>
+                    </article>
+                    <article>
+                      <span>Ventes prévues</span>
+                      <strong>{eggStockForecastSalesTotal}</strong>
+                      <em>oeufs sur 7 jours</em>
+                    </article>
+                    <article>
+                      <span>Ponte estimée</span>
+                      <strong>{eggStockForecastProductionTotal}</strong>
+                      <em>oeufs sur 7 jours</em>
+                    </article>
+                    <article className={eggStockForecastEnd < 0 ? "is-alert" : ""}>
+                      <span>Stock estimé J+7</span>
+                      <strong>{eggStockForecastEnd}</strong>
+                      <em>stock mini : {eggStockForecastLowest}</em>
+                    </article>
+                  </div>
+
+                  {eggStockForecastHasRisk && (
+                    <div className="egg-stock-forecast__alert">
+                      Attention, les commandes prévues risquent de dépasser le stock estimé. Pensez à ajuster les créneaux ou à prévenir les clients.
+                    </div>
+                  )}
+
+                  <div className="egg-stock-forecast__rows">
+                    {eggStockForecastRows.map((day, index) => (
+                      <article key={day.date} className={day.estimatedStock < 0 ? "is-alert" : ""}>
+                        <div className="egg-stock-forecast__day-heading">
+                          <span>{formatDeliveryDate(day.date)}</span>
+                          <em>J+{index + 1}</em>
+                        </div>
+                        <strong>{day.estimatedStock} <small>oeufs</small></strong>
+                        <div className="egg-stock-forecast__day-details">
+                          <span><b>+{day.estimatedProduction}</b> ponte</span>
+                          <span><b>-{day.plannedSales}</b> ventes</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section className="admin-products-panel egg-production-panel" data-section="eggs">
+                <div className="admin-panel-title">
+                  <span><Egg size={24} /></span>
+                  <div>
+                    <h2>Suivi de ponte</h2>
+                    <p>Saisissez les oeufs ramasses chaque jour pour suivre l'evolution sur l'annee.</p>
+                  </div>
+                </div>
+
+                <form className="egg-production-form" onSubmit={saveEggProductionLog}>
+                  <label>
+                    <span>Date</span>
+                    <input
+                      type="date"
+                      value={eggProductionForm.logDate}
+                      onChange={(e) => setEggProductionForm({ ...eggProductionForm, logDate: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Oeufs ramasses</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={eggProductionForm.eggsCollected}
+                      onChange={(e) => setEggProductionForm({ ...eggProductionForm, eggsCollected: e.target.value })}
+                      placeholder="Ex : 128"
+                    />
+                  </label>
+                  <label>
+                    <span>Note</span>
+                    <input
+                      value={eggProductionForm.notes}
+                      onChange={(e) => setEggProductionForm({ ...eggProductionForm, notes: e.target.value })}
+                      placeholder="Optionnel : chaleur, nouvelles poules..."
+                    />
+                  </label>
+                  <button type="submit" className="primary-action">
+                    Enregistrer la ponte
+                  </button>
+                </form>
+
+                <div className="egg-production-stats">
+                  <article>
+                    <span>Total {currentYear}</span>
+                    <strong>{eggProductionTotalYear}</strong>
+                    <em>oeufs ramasses</em>
+                  </article>
+                  <article>
+                    <span>Moyenne</span>
+                    <strong>{eggProductionAverageYear}</strong>
+                    <em>oeufs par jour saisi</em>
+                  </article>
+                  <article>
+                    <span>Meilleur jour</span>
+                    <strong>{eggProductionBestDay ? eggProductionBestDay.eggs_collected : 0}</strong>
+                    <em>{eggProductionBestDay ? formatDeliveryDate(eggProductionBestDay.log_date) : "Aucune saisie"}</em>
+                  </article>
+                  <article>
+                    <span>Jours suivis</span>
+                    <strong>{eggProductionLogsThisYear.length}</strong>
+                    <em>jour{eggProductionLogsThisYear.length > 1 ? "s" : ""} enregistres</em>
+                  </article>
+                </div>
+
+                <div className="egg-ratio-calendar">
+                  <div className="egg-ratio-calendar__header">
+                    <div>
+                      <h3>Calendrier ventes / production</h3>
+                      <p>Visualisez les oeufs vendus par jour face a la ponte saisie. Les totaux et ratios demarrent au 13/06/2026.</p>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setEggProductionCalendarMonth(shiftMonth(eggProductionCalendarMonth, -1))}
+                        aria-label="Mois precedent"
+                      >
+                        &lt;
+                      </button>
+                      <strong>{getMonthLabel(eggProductionCalendarMonth)}</strong>
+                      <button
+                        type="button"
+                        onClick={() => setEggProductionCalendarMonth(shiftMonth(eggProductionCalendarMonth, 1))}
+                        aria-label="Mois suivant"
+                      >
+                        &gt;
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="egg-ratio-calendar__summary">
+                    <article>
+                      <span>Production</span>
+                      <strong>{eggProductionCalendarProduced}</strong>
+                      <em>oeufs depuis le 13/06</em>
+                    </article>
+                    <article>
+                      <span>Ventes</span>
+                      <strong>{eggProductionCalendarSold}</strong>
+                      <em>oeufs depuis le 13/06</em>
+                    </article>
+                    <article className={eggProductionCalendarBalance < 0 ? "is-alert" : ""}>
+                      <span>Solde</span>
+                      <strong>{eggProductionCalendarBalance > 0 ? `+${eggProductionCalendarBalance}` : eggProductionCalendarBalance}</strong>
+                      <em>oeufs depuis le 13/06</em>
+                    </article>
+                    <article>
+                      <span>Ratio</span>
+                      <strong>{eggProductionCalendarRatio}%</strong>
+                      <em>vendu / produit</em>
+                    </article>
+                  </div>
+
+                  <div className="egg-ratio-calendar__legend">
+                    <span><i className="is-ok" /> Production suffisante</span>
+                    <span><i className="is-warning" /> Stock a surveiller</span>
+                    <span><i className="is-alert" /> Ventes superieures</span>
+                  </div>
+
+                  <div className="egg-ratio-calendar__grid">
+                    {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((dayName) => (
+                      <span key={dayName} className="egg-ratio-calendar__weekday">{dayName}</span>
+                    ))}
+                    {eggProductionCalendarDays.map((day) => {
+                      const ratioClass =
+                        !day.countsForRatio
+                          ? ""
+                          : day.sold > day.produced
+                          ? "is-alert"
+                          : day.sold > 0 && day.produced > 0 && day.ratio >= 80
+                          ? "is-warning"
+                          : day.produced > 0 || day.sold > 0
+                          ? "is-ok"
+                          : "";
+
+                      return (
+                        <article
+                          key={day.date}
+                          className={`egg-ratio-calendar__day ${day.inMonth ? "" : "is-muted"} ${!day.countsForRatio ? "is-muted" : ""} ${ratioClass}`}
+                        >
+                          <strong>{day.dayNumber}</strong>
+                          <span>Produit : {day.produced}</span>
+                          <span>Vendu : {day.sold}</span>
+                          {!day.countsForRatio && day.inMonth ? (
+                            <em>hors calcul</em>
+                          ) : (day.produced > 0 || day.sold > 0) && (
+                            <em>{day.balance >= 0 ? `+${day.balance}` : day.balance} oeufs</em>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="egg-production-chart" aria-label="Evolution de la ponte sur les 30 derniers jours">
+                  {eggProductionLast30Days.length > 0 ? (
+                    eggProductionLast30Days.map((log) => {
+                      const maxEggs = Math.max(...eggProductionLast30Days.map((item) => Number(item.eggs_collected || 0)), 1);
+                      const height = Math.max(12, Math.round((Number(log.eggs_collected || 0) / maxEggs) * 100));
+
+                      return (
+                        <span key={log.id || log.log_date} title={`${formatDeliveryDate(log.log_date)} : ${log.eggs_collected} oeufs`}>
+                          <i style={{ height: `${height}%` }} />
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <p>Aucune saisie de ponte pour le moment.</p>
+                  )}
+                </div>
+
+                <div className="egg-production-bottom">
+                  <div className="egg-production-months">
+                    <h3>Par mois</h3>
+                    {eggProductionMonthlyStats.slice(-6).map((month) => (
+                      <p key={month.month}>
+                        <span>{getMonthLabel(month.month)}</span>
+                        <strong>{month.total} oeufs</strong>
+                        <em>{Math.round(month.total / Math.max(1, month.days))}/jour</em>
+                      </p>
+                    ))}
+                    {eggProductionMonthlyStats.length === 0 && <p>Aucun mois suivi.</p>}
+                  </div>
+
+                  <div className="egg-production-history">
+                    <h3>Dernieres saisies</h3>
+                    {eggProductionLogs.slice(0, 8).map((log) => (
+                      <p key={log.id || log.log_date}>
+                        <span>{formatDeliveryDate(log.log_date)}</span>
+                        <strong>{log.eggs_collected} oeufs</strong>
+                        {log.notes && <em>{log.notes}</em>}
+                      </p>
+                    ))}
+                    {eggProductionLogs.length === 0 && <p>Aucune ponte enregistree.</p>}
+                  </div>
                 </div>
               </section>
 
@@ -10455,7 +13445,16 @@ function openTutorialFromPage(guideId) {
                         </div>
 
                         <div className="delivery-products">
-                          <h3>Produits à préparer</h3>
+                          <div className="delivery-products__header">
+                            <h3>Produits à préparer</h3>
+                            <button type="button" onClick={() => openDeliveryRouteMap(selectedPlanningDay.date)}>
+                              <MapPin size={16} />
+                              Tournée Google Maps
+                            </button>
+                          </div>
+                          <p className="delivery-route-hint">
+                            L'ordre ci-dessous est trié par zone, ville, rue puis numéro. Le bouton Google Maps reprend ce même ordre.
+                          </p>
                           <div>
                             {selectedPlanningDay.products.map((product) => (
                               <span key={`${product.name}-${product.unitLabel}`}>
@@ -10466,16 +13465,20 @@ function openTutorialFromPage(guideId) {
                         </div>
 
                         <div className="delivery-orders">
-                          {selectedPlanningDay.orders.map((order) => (
+                          {selectedPlanningDay.orders.map((order, index) => (
                             <article key={order.id}>
                               <div>
-                                <strong>{order.client}</strong>
+                                <strong><span className="delivery-step-number">{index + 1}</span>{order.client}</strong>
                                 <span>{order.address || "Adresse non renseignée"}</span>
                                 {order.comment && <em>{order.comment}</em>}
                               </div>
                               <div>
                                 <span>{getOrderSummary(order)}</span>
                                 <strong>{order.status}</strong>
+                                <button type="button" onClick={() => openOrderAddressMap(order)} disabled={!order.address}>
+                                  <MapPin size={15} />
+                                  Carte
+                                </button>
                               </div>
                             </article>
                           ))}
@@ -10604,20 +13607,11 @@ function openTutorialFromPage(guideId) {
                                 </option>
                               ))}
                             </select>
-                            <div className="admin-message-actions">
-                              <button type="button" className="admin-message-actions__whatsapp" onClick={() => openPreparedMessage("order-ready", o, "whatsapp")}>
-                                WhatsApp prête
-                              </button>
-                              <button type="button" onClick={() => openPreparedMessage("order-ready", o, "sms")}>
-                                SMS prête
-                              </button>
-                              <button type="button" onClick={() => openPreparedMessage("order-ready", o, "email")}>
-                                Email prête
-                              </button>
-                              <button type="button" onClick={() => copyPreparedMessage("order-ready", o)}>
-                                Copier
-                              </button>
-                            </div>
+                            <AdminPreparedMessageActions
+                              scope="order"
+                              item={o}
+                              options={[{ value: "order-ready", label: "Commande prête" }]}
+                            />
                           </td>
                           <td data-label="Archive">
                             <button type="button" className="admin-inline-button" onClick={() => setOrderArchived(o, !o.archived_at)}>
@@ -10637,7 +13631,7 @@ function openTutorialFromPage(guideId) {
                 </div>
               </section>
 
-              <section className="admin-orders-panel" data-section="clients">
+              <section id="admin-clients-panel" className="admin-orders-panel" data-section="clients">
                 <div className="admin-panel-title admin-panel-title--row">
                   <span><ShieldCheck size={24} /></span>
                   <div>
@@ -10647,6 +13641,24 @@ function openTutorialFromPage(guideId) {
                     </p>
                   </div>
                 </div>
+
+                <section className="address-validation-panel" aria-label="Vérification des adresses clients">
+                  <div>
+                    <span>Qualité des adresses</span>
+                    <h3>Vérification avec la Base Adresse Nationale</h3>
+                    <p>Les corrections restent soumises à votre validation et ne sont jamais appliquées automatiquement.</p>
+                  </div>
+                  <div className="address-validation-panel__counts">
+                    <span><b>{addressValidationCounts.exact}</b> reconnues</span>
+                    <span><b>{addressValidationCounts.suggestion}</b> corrections</span>
+                    <span><b>{addressValidationCounts.review + addressValidationCounts.missing}</b> à vérifier</span>
+                  </div>
+                  <button type="button" onClick={validateAllCustomerAddresses} disabled={addressValidationRunning}>
+                    {addressValidationRunning
+                      ? `Vérification ${addressValidationProgress.current}/${addressValidationProgress.total}`
+                      : "Vérifier toutes les adresses"}
+                  </button>
+                </section>
 
                 <div className="client-admin-tools">
                   <label className="admin-search">
@@ -10699,6 +13711,18 @@ function openTutorialFromPage(guideId) {
                   >
                     Clients récents
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClientQuickFilter("missing-contact");
+                      setClientAccessFilter("all");
+                      setClientSearch("");
+                      setClientSort("name");
+                    }}
+                    className={clientQuickFilter === "missing-contact" ? "is-active" : ""}
+                  >
+                    Infos manquantes ({clientsMissingContactInfo.length})
+                  </button>
                 </div>
 
                 <section className="admin-reminders-panel" aria-label="Rappels internes admin">
@@ -10710,7 +13734,7 @@ function openTutorialFromPage(guideId) {
                     <strong>{adminReminders.filter((reminder) => (reminder.status || "À faire") !== "Fait").length} actif{adminReminders.filter((reminder) => (reminder.status || "À faire") !== "Fait").length > 1 ? "s" : ""}</strong>
                   </div>
 
-                  <form className="admin-reminder-form" onSubmit={saveAdminReminder}>
+                  <form id="admin-reminder-form" className="admin-reminder-form" onSubmit={saveAdminReminder}>
                     <input
                       value={adminReminderForm.title}
                       onChange={(e) => setAdminReminderForm({ ...adminReminderForm, title: e.target.value })}
@@ -10785,7 +13809,7 @@ function openTutorialFromPage(guideId) {
                 </section>
 
                 {selectedClientProfile && (
-                  <section className="client-detail-panel" aria-label="Fiche client détaillée">
+                  <section id="admin-client-detail-panel" className="client-detail-panel" aria-label="Fiche client détaillée">
                     <div className="client-detail-panel__header">
                       <div>
                         <span>Fiche client</span>
@@ -10795,13 +13819,21 @@ function openTutorialFromPage(guideId) {
                       <div className="client-detail-panel__actions">
                         <button
                           type="button"
-                          onClick={() =>
-                            setAdminReminderForm({
-                              ...emptyAdminReminderForm,
-                              profileId: selectedClientProfile.id,
-                              title: `Rappeler ${selectedClientProfile.full_name || selectedClientProfile.email || "ce client"}`,
-                            })
-                          }
+                          className="client-detail-contact-button client-detail-contact-button--whatsapp"
+                          onClick={() => openClientDirectMessage(selectedClientProfile, "whatsapp")}
+                        >
+                          WhatsApp
+                        </button>
+                        <button
+                          type="button"
+                          className="client-detail-contact-button"
+                          onClick={() => openClientDirectMessage(selectedClientProfile, "email")}
+                        >
+                          Email
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => prepareClientReminder(selectedClientProfile)}
                         >
                           Ajouter un rappel
                         </button>
@@ -10967,14 +13999,36 @@ function openTutorialFromPage(guideId) {
                               <button
                                 type="button"
                                 className="client-detail-button"
-                                onClick={() => setSelectedClientProfileId(profile.id)}
+                                onClick={() => openClientProfileFromAdminSearch(profile)}
                               >
                                 Fiche client
                               </button>
                             </td>
                             <td data-label="Email">{profile.email || "Email non renseigné"}</td>
                             <td data-label="Téléphone">{profile.phone || "Téléphone non renseigné"}</td>
-                            <td data-label="Adresse">{profile.delivery_address || "Adresse non renseignée"}</td>
+                            <td data-label="Adresse">
+                              <div className="client-address-validation">
+                                <strong>{profile.delivery_address || "Adresse non renseignée"}</strong>
+                                {profile.address_validation_status === "exact" && (
+                                  <span className="is-exact">Adresse reconnue</span>
+                                )}
+                                {profile.address_validation_status === "suggestion" && (
+                                  <>
+                                    <span className="is-suggestion">Correction proposée</span>
+                                    <em>{profile.address_validation_suggestion}</em>
+                                    <button type="button" onClick={() => acceptCustomerAddressSuggestion(profile)}>
+                                      Appliquer cette adresse
+                                    </button>
+                                  </>
+                                )}
+                                {profile.address_validation_status === "review" && (
+                                  <span className="is-review">Adresse à vérifier manuellement</span>
+                                )}
+                                {profile.address_validation_status === "missing" && (
+                                  <span className="is-review">Adresse manquante</span>
+                                )}
+                              </div>
+                            </td>
                             <td data-label="Notifications">
                               {pushSummary.active ? (
                                 <span className="notification-status notification-status--active">
@@ -11011,7 +14065,11 @@ function openTutorialFromPage(guideId) {
                       {filteredCustomerProfiles.length === 0 && (
                         <tr>
                           <td colSpan="6" className="admin-empty">
-                            {customerProfiles.length === 0 ? "Aucun compte client pour le moment." : "Aucun client ne correspond à cette recherche."}
+                            {customerProfiles.length === 0
+                              ? "Aucun compte client pour le moment."
+                              : clientQuickFilter === "missing-contact"
+                              ? "Aucun client avec téléphone ou adresse manquante."
+                              : "Aucun client ne correspond à cette recherche."}
                           </td>
                         </tr>
                       )}
@@ -11227,6 +14285,185 @@ function openTutorialFromPage(guideId) {
                         );
                       })}
                     </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="admin-products-panel admin-notifications-panel" data-section="notifications">
+                <div className="admin-panel-title admin-panel-title--row">
+                  <span><BellRing size={24} /></span>
+                  <div>
+                    <h2>Centre de notifications</h2>
+                    <p>Commandes, messages, réservations et annulations à suivre au même endroit.</p>
+                  </div>
+                </div>
+
+                <div className="admin-notification-summary">
+                  <article className={unreadAdminNotifications.length > 0 ? "has-unread" : ""}>
+                    <span>Non vues</span>
+                    <strong>{unreadAdminNotifications.length}</strong>
+                  </article>
+                  <article>
+                    <span>Historique</span>
+                    <strong>{adminNotificationCounts.total}</strong>
+                  </article>
+                  <article>
+                    <span>Commandes</span>
+                    <strong>{adminNotificationCounts.Commandes || 0}</strong>
+                  </article>
+                  <article>
+                    <span>Messages</span>
+                    <strong>{adminNotificationCounts.Messages || 0}</strong>
+                  </article>
+                  <article className={kennelPaymentFollowups.length > 0 ? "has-unread" : ""}>
+                    <span>Paiements pension</span>
+                    <strong>{kennelPaymentFollowups.length}</strong>
+                  </article>
+                  <article>
+                    <span>Ventes</span>
+                    <strong>{adminNotificationCounts.Ventes || 0}</strong>
+                  </article>
+                </div>
+
+                <div className="admin-notification-actions">
+                  {[
+                    { value: "unread", label: "Non vues" },
+                    { value: "all", label: "Toutes" },
+                    { value: "Commandes", label: "Commandes" },
+                    { value: "Messages", label: "Messages" },
+                    { value: "Ferme", label: "Ferme" },
+                    { value: "Pension", label: "Pension" },
+                    { value: "Ventes", label: "Ventes" },
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      className={adminNotificationFilter === filter.value ? "is-active" : ""}
+                      onClick={() => setAdminNotificationFilter(filter.value)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                  <button type="button" className="admin-notification-actions__mark" onClick={markAllAdminNotificationsSeen}>
+                    Tout marquer comme vu
+                  </button>
+                </div>
+
+                <div className="admin-notification-list">
+                  {displayedAdminNotifications.map((notification) => (
+                    <article
+                      key={notification.id}
+                      className={`admin-notification-card admin-notification-card--${notification.tone} ${notification.seen_at ? "is-seen" : "is-unread"}`}
+                    >
+                      <div>
+                        <span>{notification.category}</span>
+                        <strong>{notification.title}</strong>
+                        <em>{formatCreatedAtDateTime(notification.created_at)}</em>
+                      </div>
+                      <p>
+                        {[notification.target_type, notification.target_label].filter(Boolean).join(" - ") || "Notification admin"}
+                      </p>
+                      {notification.details && Object.keys(notification.details).length > 0 && (
+                        <small>
+                          {Object.entries(notification.details)
+                            .filter(([, value]) => value !== null && value !== undefined && value !== "")
+                            .slice(0, 4)
+                            .map(([key, value]) => `${key.replaceAll("_", " ")} : ${String(value)}`)
+                            .join(" | ")}
+                        </small>
+                      )}
+                      <div className="admin-notification-card__actions">
+                        <button type="button" onClick={notification.open}>
+                          Ouvrir
+                        </button>
+                        {!notification.seen_at && (
+                          <button type="button" onClick={() => markAdminNotificationSeen(notification.id)}>
+                            Marquer comme vu
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+
+                  {displayedAdminNotifications.length === 0 && (
+                    <p className="admin-empty">
+                      {adminNotificationFilter === "unread"
+                        ? "Aucune notification non vue."
+                        : "Aucune notification dans cette catégorie."}
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="admin-products-panel admin-cancellations-panel" data-section="cancellations">
+                <div className="admin-panel-title admin-panel-title--row">
+                  <span><History size={24} /></span>
+                  <div>
+                    <h2>Historique des annulations</h2>
+                    <p>Commandes et réservations annulées regroupées au même endroit pour garder une trace claire.</p>
+                  </div>
+                </div>
+
+                <div className="admin-cancellations-summary">
+                  <article>
+                    <span>Total annulations</span>
+                    <strong>{cancelledItems.length}</strong>
+                  </article>
+                  <article>
+                    <span>Par les clients</span>
+                    <strong>{cancelledItems.filter((item) => item.origin === "Annulée par le client").length}</strong>
+                  </article>
+                  <article>
+                    <span>Commandes</span>
+                    <strong>{cancelledItems.filter((item) => item.type === "Commande d'œufs").length}</strong>
+                  </article>
+                  <article>
+                    <span>Réservations</span>
+                    <strong>{cancelledItems.filter((item) => item.type !== "Commande d'œufs").length}</strong>
+                  </article>
+                </div>
+
+                <div className="admin-cancellations-list">
+                  {cancelledItems.map((item) => (
+                    <article key={item.id} className="admin-cancellation-card">
+                      <div className="admin-cancellation-card__head">
+                        <div>
+                          <span>{item.type}</span>
+                          <strong>{item.client}</strong>
+                          {item.contact && <em>{item.contact}</em>}
+                        </div>
+                        <span className={item.origin === "Annulée par le client" ? "cancellation-origin is-client" : "cancellation-origin"}>
+                          {item.origin}
+                        </span>
+                      </div>
+
+                      <div className="admin-cancellation-card__grid">
+                        <p className="admin-cancellation-card__detail">
+                          <span>Annulation</span>
+                          <strong>{formatCreatedAtDateTime(item.cancelledAt)}</strong>
+                        </p>
+                        <p>
+                          <span>{item.dateLabel}</span>
+                          <strong>{formatDeliveryDate(item.dateValue)}</strong>
+                        </p>
+                        <p>
+                          <span>Montant</span>
+                          <strong>{item.amount.toFixed(2)} EUR</strong>
+                        </p>
+                        <p>
+                          <span>Détail</span>
+                          <strong>{item.detail || "Aucun détail"}</strong>
+                        </p>
+                      </div>
+
+                      <button type="button" className="secondary-action" onClick={item.open}>
+                        Ouvrir la rubrique
+                      </button>
+                    </article>
+                  ))}
+
+                  {cancelledItems.length === 0 && (
+                    <p className="admin-empty">Aucune annulation enregistrée pour le moment.</p>
                   )}
                 </div>
               </section>
@@ -11465,12 +14702,168 @@ function openTutorialFromPage(guideId) {
                 )}
               </section>
 
+              <section className="admin-products-panel occasional-sales-admin-panel" data-section="occasionalSales">
+                <div className="admin-panel-title admin-panel-title--row">
+                  <span><ShoppingBasket size={24} /></span>
+                  <div>
+                    <h2>Ventes ponctuelles</h2>
+                    <p>Affichez une vente temporaire sur l'accueil et suivez les réservations reçues.</p>
+                  </div>
+                </div>
+
+                <form className="occasional-sales-admin-form" onSubmit={saveOccasionalSalesContent}>
+                  <label className="admin-payment-check occasional-sales-admin-form__wide">
+                    <input
+                      type="checkbox"
+                      checked={occasionalSalesForm.enabled === true}
+                      onChange={(e) => setOccasionalSalesForm({ ...occasionalSalesForm, enabled: e.target.checked })}
+                    />
+                    <span>Afficher l'encadré sur la page d'accueil</span>
+                  </label>
+                  <label>
+                    <span>Petit titre</span>
+                    <input
+                      value={occasionalSalesForm.eyebrow}
+                      onChange={(e) => setOccasionalSalesForm({ ...occasionalSalesForm, eyebrow: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Titre</span>
+                    <input
+                      value={occasionalSalesForm.title}
+                      onChange={(e) => setOccasionalSalesForm({ ...occasionalSalesForm, title: e.target.value })}
+                    />
+                  </label>
+                  <label className="occasional-sales-admin-form__wide">
+                    <span>Photo principale</span>
+                    <input
+                      value={occasionalSalesForm.image_url}
+                      onChange={(e) => setOccasionalSalesForm({ ...occasionalSalesForm, image_url: e.target.value })}
+                      placeholder="/images/vente-ponctuelle.jpg"
+                    />
+                    <PhotoQuickPicker
+                      imageOptions={imageOptions}
+                      onPick={(imageUrl) => setOccasionalSalesForm({ ...occasionalSalesForm, image_url: imageUrl })}
+                    />
+                  </label>
+                  {occasionalSalesForm.image_url && (
+                    <img
+                      src={normalizeImageUrl(occasionalSalesForm.image_url)}
+                      alt="Aperçu ventes ponctuelles"
+                      className="home-news-admin-preview"
+                    />
+                  )}
+                  <label className="occasional-sales-admin-form__wide">
+                    <span>Texte d'introduction</span>
+                    <textarea
+                      value={occasionalSalesForm.text}
+                      onChange={(e) => setOccasionalSalesForm({ ...occasionalSalesForm, text: e.target.value })}
+                      rows="3"
+                    />
+                  </label>
+                  <label className="occasional-sales-admin-form__wide">
+                    <span>Message pratique dans l'encadré</span>
+                    <textarea
+                      value={occasionalSalesForm.notice_text || ""}
+                      onChange={(e) => setOccasionalSalesForm({ ...occasionalSalesForm, notice_text: e.target.value })}
+                      placeholder="Ex. Pensez à prendre un carton pour le transport."
+                      rows="2"
+                    />
+                  </label>
+
+                  <div className="occasional-sales-admin-items">
+                    {(occasionalSalesForm.items || []).map((item) => (
+                      <article key={item.id}>
+                        <label className="admin-payment-check">
+                          <input
+                            type="checkbox"
+                            checked={item.active !== false}
+                            onChange={(e) => updateOccasionalSaleItem(item.id, { active: e.target.checked })}
+                          />
+                          <span>Afficher {item.name || "ce produit"}</span>
+                        </label>
+                        <label>
+                          <span>Nom</span>
+                          <input value={item.name} onChange={(e) => updateOccasionalSaleItem(item.id, { name: e.target.value })} />
+                        </label>
+                        <label>
+                          <span>Prix</span>
+                          <input value={item.price} onChange={(e) => updateOccasionalSaleItem(item.id, { price: e.target.value })} placeholder="Ex : 6" />
+                        </label>
+                        <label>
+                          <span>Unité</span>
+                          <input value={item.unit_label} onChange={(e) => updateOccasionalSaleItem(item.id, { unit_label: e.target.value })} />
+                        </label>
+                        <label>
+                          <span>Quantité disponible</span>
+                          <input value={item.available_quantity} onChange={(e) => updateOccasionalSaleItem(item.id, { available_quantity: e.target.value })} />
+                        </label>
+                        <label className="occasional-sales-admin-form__wide">
+                          <span>Description</span>
+                          <textarea value={item.description} onChange={(e) => updateOccasionalSaleItem(item.id, { description: e.target.value })} rows="3" />
+                        </label>
+                        <label className="occasional-sales-admin-form__wide">
+                          <span>Photo produit</span>
+                          <input value={item.image_url} onChange={(e) => updateOccasionalSaleItem(item.id, { image_url: e.target.value })} />
+                          <PhotoQuickPicker imageOptions={imageOptions} onPick={(imageUrl) => updateOccasionalSaleItem(item.id, { image_url: imageUrl })} />
+                        </label>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="about-admin-actions occasional-sales-admin-form__wide">
+                    <button type="submit" className="primary-action">Enregistrer les ventes</button>
+                    <button type="button" className="secondary-action" onClick={() => setOccasionalSalesForm(occasionalSalesContent)}>
+                      Annuler
+                    </button>
+                  </div>
+                </form>
+
+                <div className="occasional-sales-reservations">
+                  <div className="admin-panel-title admin-panel-title--row">
+                    <span><ClipboardList size={22} /></span>
+                    <div>
+                      <h3>Réservations reçues</h3>
+                      <p>{occasionalSaleReservations.length} demande{occasionalSaleReservations.length > 1 ? "s" : ""} enregistrée{occasionalSaleReservations.length > 1 ? "s" : ""}.</p>
+                    </div>
+                    <button type="button" className="secondary-action" onClick={loadOccasionalSaleReservations}>
+                      Actualiser
+                    </button>
+                  </div>
+                  <div className="occasional-sales-reservation-list">
+                    {occasionalSaleReservations.map((reservation) => (
+                      <article key={reservation.id}>
+                        <div>
+                          <span>{formatCreatedAtDateTime(reservation.created_at)}</span>
+                          <strong>{reservation.quantity} x {reservation.item_name}</strong>
+                          <p>{reservation.client_name} - {[reservation.phone, reservation.client_email].filter(Boolean).join(" - ")}</p>
+                          {reservation.notes && <em>{reservation.notes}</em>}
+                        </div>
+                        <select
+                          value={reservation.status || "Nouvelle"}
+                          onChange={(e) => updateOccasionalSaleReservation(reservation.id, { status: e.target.value })}
+                        >
+                          <option value="Nouvelle">Nouvelle</option>
+                          <option value="Confirmée">Confirmée</option>
+                          <option value="Préparée">Préparée</option>
+                          <option value="Terminée">Terminée</option>
+                          <option value="Annulée">Annulée</option>
+                        </select>
+                      </article>
+                    ))}
+                    {occasionalSaleReservations.length === 0 && (
+                      <p className="admin-empty">Aucune réservation ponctuelle pour le moment.</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
               <section className="admin-products-panel home-news-admin-panel" data-section="news">
                 <div className="admin-panel-title admin-panel-title--row">
                   <span><Star size={24} /></span>
                   <div>
                     <h2>Actualités de l'accueil</h2>
-                    <p>Ajoutez les actualités du moment avec une photo, un titre, un texte et une date.</p>
+                    <p>Ajoutez les actualités du moment avec une photo principale, des photos secondaires, un titre, un texte et une date.</p>
                   </div>
                 </div>
 
@@ -11492,7 +14885,7 @@ function openTutorialFromPage(guideId) {
                     />
                   </label>
                   <label className="home-news-admin-form__wide">
-                    <span>Photo</span>
+                    <span>Photo principale</span>
                     <input
                       value={homeNewsForm.image_url}
                       onChange={(e) => setHomeNewsForm({ ...homeNewsForm, image_url: e.target.value })}
@@ -11509,6 +14902,32 @@ function openTutorialFromPage(guideId) {
                       alt="Aperçu actualité"
                       className="home-news-admin-preview"
                     />
+                  )}
+                  <label className="home-news-admin-form__wide">
+                    <span>Photos secondaires</span>
+                    <textarea
+                      value={homeNewsForm.gallery_images}
+                      onChange={(e) => setHomeNewsForm({ ...homeNewsForm, gallery_images: e.target.value })}
+                      placeholder="/images/photo-1.jpg&#10;/images/photo-2.jpg"
+                      rows="4"
+                    />
+                    <PhotoQuickPicker
+                      imageOptions={imageOptions}
+                      label="Ajouter une photo secondaire existante"
+                      onPick={(imageUrl) =>
+                        setHomeNewsForm((current) => ({
+                          ...current,
+                          gallery_images: appendImageToGallery(current.gallery_images, imageUrl),
+                        }))
+                      }
+                    />
+                  </label>
+                  {parseGalleryImages(homeNewsForm.gallery_images).length > 0 && (
+                    <div className="home-news-admin-gallery-preview">
+                      {parseGalleryImages(homeNewsForm.gallery_images).map((imageUrl, index) => (
+                        <img key={`${imageUrl}-${index}`} src={imageUrl} alt={`Photo secondaire ${index + 1}`} />
+                      ))}
+                    </div>
                   )}
                   <label className="home-news-admin-form__wide">
                     <span>Texte</span>
@@ -11549,6 +14968,9 @@ function openTutorialFromPage(guideId) {
                         <time>{item.published_at ? formatDeliveryDate(item.published_at) : "Sans date"}</time>
                         <h3>{item.title || "Actualité sans titre"}</h3>
                         <p>{item.text}</p>
+                        {parseGalleryImages(item.gallery_images).length > 0 && (
+                          <em>{parseGalleryImages(item.gallery_images).length} photo secondaire{parseGalleryImages(item.gallery_images).length > 1 ? "s" : ""}</em>
+                        )}
                       </div>
                       <div className="home-news-admin-list__actions">
                         <button type="button" onClick={() => editHomeNewsItem(item)}>Modifier</button>
@@ -11898,20 +15320,14 @@ function openTutorialFromPage(guideId) {
                         <button type="button" onClick={() => setEducationBookingArchived(booking, !booking.archived_at)}>
                           {booking.archived_at ? "Restaurer" : "Archiver"}
                         </button>
-                        <div className="admin-message-actions">
-                          <button type="button" className="admin-message-actions__whatsapp" onClick={() => openPreparedMessage("education-confirmed", booking, "whatsapp")}>
-                            WhatsApp confirmer
-                          </button>
-                          <button type="button" onClick={() => openPreparedMessage("education-confirmed", booking, "sms")}>
-                            SMS confirmer
-                          </button>
-                          <button type="button" onClick={() => openPreparedMessage("education-confirmed", booking, "email")}>
-                            Email confirmer
-                          </button>
-                          <button type="button" onClick={() => copyPreparedMessage("education-confirmed", booking)}>
-                            Copier
-                          </button>
-                        </div>
+                        <AdminPreparedMessageActions
+                          scope="education"
+                          item={booking}
+                          options={[
+                            { value: "education-confirmed", label: "Réservation confirmée" },
+                            { value: "education-reminder", label: "Rappel avant activité" },
+                          ]}
+                        />
                       </div>
                     </article>
                   ))}
@@ -12001,7 +15417,7 @@ function openTutorialFromPage(guideId) {
                   <span><CalendarDays size={24} /></span>
                   <div>
                     <h2>Calendrier pension</h2>
-                    <p>Vue mensuelle des nuitées réservées, limitée à {KENNEL_MAX_BOOKINGS_PER_NIGHT} chiens par nuit.</p>
+                    <p>Vue mensuelle des journées réservées : {KENNEL_MAX_BOOKINGS_PER_NIGHT} chiens côté client, 5e chien possible seulement en saisie admin exceptionnelle.</p>
                   </div>
                 </div>
 
@@ -12068,7 +15484,7 @@ function openTutorialFromPage(guideId) {
                           <div className="kennel-ops-meta">
                             <span>{booking.phone || "Téléphone non renseigné"}</span>
                             <span>Départ {formatDeliveryDate(booking.end_date)}</span>
-                            <span>{getKennelNights(booking.start_date, booking.end_date).length} nuitée{getKennelNights(booking.start_date, booking.end_date).length > 1 ? "s" : ""}</span>
+                            <span>{getKennelBookingDays(booking.start_date, booking.end_date)} jour{getKennelBookingDays(booking.start_date, booking.end_date) > 1 ? "s" : ""} réservé{getKennelBookingDays(booking.start_date, booking.end_date) > 1 ? "s" : ""}</span>
                           </div>
                           <div className="kennel-ops-dog">
                             {[booking.dog?.breed, booking.dog?.sex, booking.dog?.birth_year].filter(Boolean).join(" - ") || "Fiche chien à compléter"}
@@ -12146,7 +15562,7 @@ function openTutorialFromPage(guideId) {
                   {kennelCalendarDays.map((day) => (
                     <article
                       key={day.date}
-                      className={`kennel-calendar__day ${day.inMonth ? "" : "is-muted"} ${day.bookings.length >= KENNEL_MAX_BOOKINGS_PER_NIGHT ? "is-full" : ""} ${day.blockedDate ? "is-blocked" : ""}`}
+                      className={`kennel-calendar__day ${day.inMonth ? "" : "is-muted"} ${day.bookings.length >= KENNEL_MAX_BOOKINGS_PER_NIGHT ? "is-full" : ""} ${day.bookings.length > KENNEL_MAX_BOOKINGS_PER_NIGHT ? "is-admin-extra" : ""} ${day.blockedDate ? "is-blocked" : ""}`}
                     >
                       <div>
                         <strong>{day.dayNumber}</strong>
@@ -12156,8 +15572,10 @@ function openTutorialFromPage(guideId) {
                         <em>{day.blockedDate.reason || "Réservations fermées"}</em>
                       ) : day.bookings.length > 0 ? (
                         <ul>
-                          {day.bookings.slice(0, 4).map((booking) => (
-                            <li key={`${day.date}-${booking.id}`}>{booking.dog?.name || booking.client_name}</li>
+                          {day.bookings.slice(0, KENNEL_MAX_BOOKINGS_PER_NIGHT + 1).map((booking) => (
+                            <li key={`${day.date}-${booking.id}`}>
+                              {booking.dog?.name || booking.client_name} - {getKennelBookingAmount(booking).toFixed(2)} EUR
+                            </li>
                           ))}
                         </ul>
                       ) : (
@@ -12173,7 +15591,7 @@ function openTutorialFromPage(guideId) {
                   <span><Plus size={24} /></span>
                   <div>
                     <h2>Ajouter une réservation hors appli</h2>
-                    <p>Saisissez vous-même un client, son chien et les dates réservées par téléphone, message ou sur place.</p>
+                    <p>Saisissez vous-même un client, son chien et les dates réservées. Le client reste bloqué à 4 chiens, mais l'admin peut ajouter un 5e chien exceptionnellement.</p>
                   </div>
                 </div>
 
@@ -12338,6 +15756,29 @@ function openTutorialFromPage(guideId) {
                         <option value="Mâle">Mâle</option>
                       </select>
                     </label>
+                    <label>
+                      <span>Numero de puce *</span>
+                      <input
+                        value={adminKennelBookingForm.dogMicrochipNumber}
+                        disabled={adminKennelBookingForm.dogNotMicrochipped}
+                        onChange={(e) => setAdminKennelBookingForm({ ...adminKennelBookingForm, dogMicrochipNumber: e.target.value })}
+                        placeholder="Ex. 250269..."
+                      />
+                    </label>
+                    <label className="admin-manual-check">
+                      <input
+                        type="checkbox"
+                        checked={adminKennelBookingForm.dogNotMicrochipped}
+                        onChange={(e) =>
+                          setAdminKennelBookingForm({
+                            ...adminKennelBookingForm,
+                            dogNotMicrochipped: e.target.checked,
+                            dogMicrochipNumber: e.target.checked ? "" : adminKennelBookingForm.dogMicrochipNumber,
+                          })
+                        }
+                      />
+                      <span>Chien non puce</span>
+                    </label>
                     <label className="admin-manual-check">
                       <input
                         type="checkbox"
@@ -12385,7 +15826,7 @@ function openTutorialFromPage(guideId) {
                   <span><CalendarCheck size={24} /></span>
                   <div>
                     <h2>Dates fermées</h2>
-                    <p>Bloquez simplement les nuitées où la pension canine n'est pas ouverte.</p>
+                    <p>Bloquez simplement les journées où la pension canine n'est pas ouverte.</p>
                   </div>
                 </div>
 
@@ -12514,7 +15955,11 @@ function openTutorialFromPage(guideId) {
                     const latestBooking = profile.bookings[0];
 
                     return (
-                      <article key={profile.id} className="kennel-dog-profile-card">
+                      <article
+                        id={`kennel-dog-profile-${profile.id}`}
+                        key={profile.id}
+                        className={`kennel-dog-profile-card ${selectedDogProfileId === profile.id ? "is-selected" : ""}`}
+                      >
                         <div className="kennel-dog-profile-card__header">
                           <div className="kennel-dog-profile-card__identity">
                             <DogAvatar dog={dog} size="large" />
@@ -12527,6 +15972,13 @@ function openTutorialFromPage(guideId) {
                           </div>
                           <div className="kennel-dog-profile-badges">
                             <span>{profile.bookings.length} séjour{profile.bookings.length > 1 ? "s" : ""}</span>
+                            <span>
+                              {dog?.is_microchipped === false
+                                ? "Non puce"
+                                : dog?.microchip_number
+                                ? `Puce ${dog.microchip_number}`
+                                : "Puce a renseigner"}
+                            </span>
                             <span>{dog?.vaccines_up_to_date ? "Vaccins à jour" : "Vaccins à vérifier"}</span>
                             <span>{dog?.sterilized ? "Stérilisé" : "Non stérilisé / à vérifier"}</span>
                           </div>
@@ -12604,6 +16056,29 @@ function openTutorialFromPage(guideId) {
                               placeholder="06 00 00 00 00"
                             />
                           </label>
+                          <label>
+                            <span>Numero de puce</span>
+                            <input
+                              defaultValue={dog?.microchip_number || ""}
+                              disabled={!dog?.id || dog?.is_microchipped === false}
+                              onBlur={(e) => updateDogProfile(dog.id, { microchip_number: e.target.value.trim(), is_microchipped: true })}
+                              placeholder="250269..."
+                            />
+                          </label>
+                          <label className="kennel-dog-check">
+                            <input
+                              type="checkbox"
+                              checked={dog?.is_microchipped === false}
+                              disabled={!dog?.id}
+                              onChange={(e) =>
+                                updateDogProfile(dog.id, {
+                                  is_microchipped: !e.target.checked,
+                                  microchip_number: e.target.checked ? "" : dog?.microchip_number || "",
+                                })
+                              }
+                            />
+                            <span>Chien non puce</span>
+                          </label>
                           <label className="kennel-dog-check">
                             <input
                               type="checkbox"
@@ -12661,6 +16136,62 @@ function openTutorialFromPage(guideId) {
                   <div>
                     <h2>Réservations chiens</h2>
                     <p>{filteredKennelBookings.length} séjour{filteredKennelBookings.length > 1 ? "s" : ""} affiché{filteredKennelBookings.length > 1 ? "s" : ""}.</p>
+                  </div>
+                </div>
+
+                <div className={`kennel-payment-tracker ${kennelPaymentFollowups.length > 0 ? "has-alert" : ""}`}>
+                  <div className="kennel-payment-tracker__header">
+                    <div>
+                      <h3>Suivi paiements pension</h3>
+                      <p>
+                        {kennelPaymentFollowups.length > 0
+                          ? `${kennelPaymentFollowups.length} séjour${kennelPaymentFollowups.length > 1 ? "s" : ""} à relancer.`
+                          : "Tous les paiements pension ouverts sont à jour."}
+                      </p>
+                    </div>
+                    <strong>{kennelPaymentFollowupTotal.toFixed(2)} EUR à suivre</strong>
+                  </div>
+
+                  {kennelPaymentFollowups.length > 0 && (
+                    <div className="kennel-payment-tracker__list">
+                      {kennelPaymentFollowups.map(({ booking, payment, remaining, amount, isDue }) => (
+                        <article key={`kennel-payment-followup-${booking.id}`} className={isDue ? "is-due" : ""}>
+                          <div>
+                            <span>{isDue ? "À relancer maintenant" : "À surveiller"}</span>
+                            <strong>{booking.client_name || "Client"} - {booking.dog?.name || "Chien"}</strong>
+                            <em>{formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</em>
+                          </div>
+                          <div>
+                            <strong>{remaining.toFixed(2)} EUR</strong>
+                            <span>Montant {amount.toFixed(2)} EUR - acompte {payment.deposit.toFixed(2)} EUR</span>
+                            <em>{payment.method}</em>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateKennelBooking(booking.id, {
+                                payment_received: true,
+                                payment_received_at: new Date().toISOString(),
+                              })
+                            }
+                          >
+                            Paiement reçu
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="kennel-payment-history">
+                    <h4>Historique paiement</h4>
+                    {kennelPaymentHistory.map((log) => (
+                      <p key={`kennel-payment-history-${log.id}`}>
+                        <span>{formatCreatedAtDateTime(log.created_at)}</span>
+                        <strong>{log.title}</strong>
+                        <em>{log.target_label || "Séjour pension"}</em>
+                      </p>
+                    ))}
+                    {kennelPaymentHistory.length === 0 && <p>Aucune relance paiement enregistrée pour le moment.</p>}
                   </div>
                 </div>
 
@@ -12786,32 +16317,22 @@ function openTutorialFromPage(guideId) {
                         <button type="button" onClick={() => setKennelBookingArchived(booking, !booking.archived_at)}>
                           {booking.archived_at ? "Restaurer" : "Archiver"}
                         </button>
-                        <div className="admin-message-actions admin-message-actions--wide">
-                          <button type="button" className="admin-message-actions__whatsapp" onClick={() => openPreparedMessage("kennel-confirmed", booking, "whatsapp")}>
-                            WhatsApp confirmer
-                          </button>
-                          <button type="button" className="admin-message-actions__whatsapp" onClick={() => openPreparedMessage("kennel-reminder", booking, "whatsapp")}>
-                            WhatsApp rappel
-                          </button>
-                          <button type="button" className="admin-message-actions__whatsapp" onClick={() => openPreparedMessage("kennel-full", booking, "whatsapp")}>
-                            WhatsApp complète
-                          </button>
-                          <button type="button" onClick={() => openPreparedMessage("kennel-confirmed", booking, "sms")}>
-                            SMS confirmer
-                          </button>
-                          <button type="button" onClick={() => openPreparedMessage("kennel-reminder", booking, "sms")}>
-                            SMS rappel
-                          </button>
-                          <button type="button" onClick={() => openPreparedMessage("kennel-full", booking, "sms")}>
-                            SMS complète
-                          </button>
-                          <button type="button" onClick={() => openPreparedMessage("kennel-confirmed", booking, "email")}>
-                            Email confirmer
-                          </button>
-                          <button type="button" onClick={() => copyPreparedMessage("kennel-confirmed", booking)}>
-                            Copier
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className={kennelContracts.some((contract) => contract.booking_id === booking.id) ? "is-contract-signed" : ""}
+                          onClick={() => setSelectedContractBooking(booking)}
+                        >
+                          {kennelContracts.some((contract) => contract.booking_id === booking.id) ? "Voir le contrat signé" : "Aperçu du contrat"}
+                        </button>
+                        <AdminPreparedMessageActions
+                          scope="kennel"
+                          item={booking}
+                          options={[
+                            { value: "kennel-confirmed", label: "Réservation confirmée" },
+                            { value: "kennel-reminder", label: "Rappel avant arrivée" },
+                            { value: "kennel-full", label: "Pension complète" },
+                          ]}
+                        />
                       </div>
                     </article>
                   ))}
@@ -12819,6 +16340,132 @@ function openTutorialFromPage(guideId) {
                   {filteredKennelBookings.length === 0 && (
                     <p className="delivery-empty">Aucune réservation pension canine pour ce filtre.</p>
                   )}
+                </div>
+              </section>
+
+              <section className="admin-orders-panel payment-page-panel" data-section="payments">
+                <div className="admin-panel-title admin-panel-title--row">
+                  <span><Euro size={24} /></span>
+                  <div>
+                    <h2>Suivi des paiements</h2>
+                    <p>Un endroit simple pour suivre les paiements pension canine depuis le 1er juin, les relances et l'historique.</p>
+                  </div>
+                </div>
+
+                <div className="payment-page-summary">
+                  <article className={kennelPaymentFollowups.length > 0 ? "is-alert" : ""}>
+                    <span>À relancer</span>
+                    <strong>{kennelPaymentFollowups.length}</strong>
+                    <em>{kennelPaymentFollowupTotal.toFixed(2)} EUR</em>
+                  </article>
+                  <article>
+                    <span>Déjà encaissé</span>
+                    <strong>{kennelPaymentReceivedTotal.toFixed(2)} EUR</strong>
+                    <em>Pension ouverte</em>
+                  </article>
+                  <article>
+                    <span>Séjours suivis</span>
+                    <strong>{kennelPaymentRows.length}</strong>
+                    <em>depuis le 1er juin</em>
+                  </article>
+                </div>
+
+                <div className={`kennel-payment-tracker ${kennelPaymentFollowups.length > 0 ? "has-alert" : ""}`}>
+                  <div className="kennel-payment-tracker__header">
+                    <div>
+                      <h3>Paiements pension à relancer</h3>
+                      <p>
+                        {kennelPaymentFollowups.length > 0
+                          ? "Les relances quotidiennes continuent tant que le paiement n'est pas coché reçu."
+                          : "Aucun paiement pension à relancer."}
+                      </p>
+                    </div>
+                    <strong>{kennelPaymentFollowupTotal.toFixed(2)} EUR à suivre</strong>
+                  </div>
+
+                  {kennelPaymentFollowups.length > 0 ? (
+                    <div className="kennel-payment-tracker__list">
+                      {kennelPaymentFollowups.map(({ booking, payment, remaining, amount, isDue }) => (
+                        <article key={`payments-page-followup-${booking.id}`} className={isDue ? "is-due" : ""}>
+                          <div>
+                            <span>{isDue ? "À relancer maintenant" : "À surveiller"}</span>
+                            <strong>{booking.client_name || "Client"} - {booking.dog?.name || "Chien"}</strong>
+                            <em>{formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</em>
+                          </div>
+                          <div>
+                            <strong>{remaining.toFixed(2)} EUR</strong>
+                            <span>Montant {amount.toFixed(2)} EUR - acompte {payment.deposit.toFixed(2)} EUR</span>
+                            <em>{payment.method}</em>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateKennelBooking(booking.id, {
+                                payment_received: true,
+                                payment_received_at: new Date().toISOString(),
+                              })
+                            }
+                          >
+                            Paiement reçu
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="payment-page-empty">Tous les séjours pension ouverts sont à jour côté paiement.</p>
+                  )}
+                </div>
+
+                <div className="payment-page-table">
+                  <h3>Tous les paiements pension depuis le 1er juin</h3>
+                  <div>
+                    {kennelPaymentRows.map(({ booking, payment, amount, remaining, isMissing }) => (
+                      <article key={`payment-row-${booking.id}`} className={isMissing ? "is-missing" : "is-paid"}>
+                        <div>
+                          <span>{payment.label}</span>
+                          <strong>{booking.client_name || "Client"} - {booking.dog?.name || "Chien"}</strong>
+                          <em>{formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</em>
+                          {booking.archived_at && <em>Archivé</em>}
+                        </div>
+                        <div>
+                          <span>Montant</span>
+                          <strong>{amount.toFixed(2)} EUR</strong>
+                          <em>Acompte {payment.deposit.toFixed(2)} EUR</em>
+                        </div>
+                        <div>
+                          <span>Reste</span>
+                          <strong>{remaining.toFixed(2)} EUR</strong>
+                          <em>{payment.method}</em>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateKennelBooking(booking.id, {
+                              payment_received: !booking.payment_received,
+                              payment_received_at: !booking.payment_received ? new Date().toISOString() : null,
+                            })
+                          }
+                        >
+                          {booking.payment_received ? "Marquer non payé" : "Paiement reçu"}
+                        </button>
+                      </article>
+                    ))}
+                    {kennelPaymentRows.length === 0 && (
+                      <p className="payment-page-empty">Aucun séjour pension à suivre depuis le 1er juin.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="kennel-payment-history payment-page-history">
+                  <h4>Historique paiement</h4>
+                  {kennelPaymentHistory.map((log) => (
+                    <p key={`payments-page-history-${log.id}`}>
+                      <span>{formatCreatedAtDateTime(log.created_at)}</span>
+                      <strong>{log.title}</strong>
+                      <em>{log.target_label || "Séjour pension"}</em>
+                    </p>
+                  ))}
+                  {kennelPaymentHistory.length === 0 && <p>Aucune relance paiement enregistrée pour le moment.</p>}
                 </div>
               </section>
 
@@ -12858,6 +16505,7 @@ function openTutorialFromPage(guideId) {
                       <option value="eggs">Œufs</option>
                       <option value="education">Ferme pédagogique</option>
                       <option value="kennel">Pension canine</option>
+                      <option value="occasional_sales">Ventes ponctuelles</option>
                     </select>
                   </label>
                   <button type="button" onClick={exportAccountingCsv} className="admin-tool-button">
@@ -12872,6 +16520,14 @@ function openTutorialFromPage(guideId) {
                     <strong>{accountingTotals.global.toFixed(2)} EUR</strong>
                   </article>
                   <article>
+                    <span>Déjà encaissé</span>
+                    <strong>{accountingTotals.paid.toFixed(2)} EUR</strong>
+                  </article>
+                  <article>
+                    <span>Reste à encaisser</span>
+                    <strong>{accountingTotals.remaining.toFixed(2)} EUR</strong>
+                  </article>
+                  <article>
                     <span>Œufs</span>
                     <strong>{accountingTotals.eggs.toFixed(2)} EUR</strong>
                   </article>
@@ -12882,6 +16538,10 @@ function openTutorialFromPage(guideId) {
                   <article>
                     <span>Pension canine</span>
                     <strong>{accountingTotals.kennel.toFixed(2)} EUR</strong>
+                  </article>
+                  <article>
+                    <span>Ventes ponctuelles</span>
+                    <strong>{accountingTotals.occasional_sales.toFixed(2)} EUR</strong>
                   </article>
                 </div>
 
@@ -12899,6 +16559,9 @@ function openTutorialFromPage(guideId) {
                     </button>
                     <button type="button" onClick={exportKennelPeriodCsv}>
                       Pension canine
+                    </button>
+                    <button type="button" onClick={exportOccasionalSalesPeriodCsv}>
+                      Ventes ponctuelles
                     </button>
                     <button type="button" onClick={exportClientsPeriodCsv}>
                       Clients
@@ -12922,6 +16585,8 @@ function openTutorialFromPage(guideId) {
                         <th>Détail</th>
                         <th>Montant</th>
                         <th>Type</th>
+                        <th>Acompte</th>
+                        <th>Payé</th>
                         <th>Paiement</th>
                         <th>Reste</th>
                         <th>Statut</th>
@@ -12936,6 +16601,8 @@ function openTutorialFromPage(guideId) {
                           <td data-label="Détail">{row.detail}</td>
                           <td data-label="Montant"><strong>{row.amount.toFixed(2)} EUR</strong></td>
                           <td data-label="Type">{row.amountSource}</td>
+                          <td data-label="Acompte">{row.depositAmount.toFixed(2)} EUR</td>
+                          <td data-label="Payé">{row.paidAmount.toFixed(2)} EUR</td>
                           <td data-label="Paiement">{row.paymentLabel}{row.paymentMethod ? ` - ${row.paymentMethod}` : ""}</td>
                           <td data-label="Reste">{row.paymentRemaining.toFixed(2)} EUR</td>
                           <td data-label="Statut">{row.status}</td>
@@ -12944,7 +16611,7 @@ function openTutorialFromPage(guideId) {
 
                       {accountingRows.length === 0 && (
                         <tr>
-                          <td colSpan="9" className="admin-empty">Aucune ligne comptable pour cette période.</td>
+                          <td colSpan="11" className="admin-empty">Aucune ligne comptable pour cette période.</td>
                         </tr>
                       )}
                     </tbody>
@@ -12975,7 +16642,7 @@ function openTutorialFromPage(guideId) {
                   <article className="statistics-card">
                     <span>Pension occupée</span>
                     <strong>{kennelOccupancyStats.occupancyRate}%</strong>
-                    <em>{kennelOccupancyStats.occupiedNights}/{kennelOccupancyStats.capacityNights} nuitées ce mois</em>
+                    <em>{kennelOccupancyStats.occupiedDays}/{kennelOccupancyStats.capacityDays} journées ce mois</em>
                   </article>
                   <article className="statistics-card">
                     <span>Clients actifs</span>
@@ -13019,7 +16686,7 @@ function openTutorialFromPage(guideId) {
                       <div className="statistics-row">
                         <span>Mois suivi</span>
                         <strong>{getMonthLabel(kennelOccupancyStats.month)}</strong>
-                        <em>capacité {KENNEL_MAX_BOOKINGS_PER_NIGHT} chiens/nuit</em>
+                        <em>capacité {KENNEL_MAX_BOOKINGS_PER_NIGHT} chiens/jour</em>
                       </div>
                       <div className="statistics-row">
                         <span>Demandes actives</span>
@@ -13249,7 +16916,7 @@ function openTutorialFromPage(guideId) {
                       <input
                         value={appSettingsForm.kennel_capacity_note}
                         onChange={(e) => setAppSettingsForm({ ...appSettingsForm, kennel_capacity_note: e.target.value })}
-                        placeholder="4 chiens par nuit"
+                        placeholder="4 chiens par jour"
                       />
                     </label>
                   </div>
@@ -13294,74 +16961,21 @@ function openTutorialFromPage(guideId) {
                 </form>
               </section>
 
-              <section className="admin-products-panel about-admin-panel" data-section="content">
+              <section className="admin-products-panel about-admin-panel" data-section="featuredEvent">
                 <div className="admin-panel-title">
-                  <span><Leaf size={24} /></span>
+                  <span><Star size={24} /></span>
                   <div>
-                    <h2>Présentation et accueil</h2>
-                    <p>Modifiez l'événement à l'honneur sur l'accueil, puis les textes de la page La ferme.</p>
+                    <h2>Événement à l'honneur</h2>
+                    <p>Gérez le bloc événement visible sur l'accueil, sa photo principale et sa page dédiée.</p>
                   </div>
                 </div>
-
-                <form className="about-admin-form photo-library-admin" onSubmit={saveCustomPhotoLibrary}>
-                  <div className="about-admin-block">
-                    <div className="home-featured-admin-help">
-                      <div>
-                        <strong>Bibliothèque photos</strong>
-                        <span>Les photos du dossier /public/images sont ajoutées automatiquement après redéploiement. Utilisez ce bloc surtout pour ajouter un lien externe ou une photo spéciale.</span>
-                      </div>
-                      <span className="photo-library-admin__count">{imageOptions.length} photo(s)</span>
-                    </div>
-                    <label>
-                      <span>Ajouter une photo</span>
-                      <div className="photo-library-admin__add">
-                        <input
-                          value={customPhotoInput}
-                          onChange={(e) => setCustomPhotoInput(e.target.value)}
-                          placeholder="/images/ma-photo.jpg ou lien complet"
-                        />
-                        <button type="button" className="secondary-action" onClick={addCustomPhotoToLibrary}>
-                          Ajouter
-                        </button>
-                      </div>
-                    </label>
-                    <label>
-                      <span>Photos ajoutées depuis l'admin</span>
-                      <textarea
-                        value={customPhotoLibraryForm.images}
-                        onChange={(e) => setCustomPhotoLibraryForm({ ...customPhotoLibraryForm, images: e.target.value })}
-                        placeholder="Un chemin ou lien par ligne"
-                        rows="5"
-                      />
-                    </label>
-                    {parseGalleryImages(customPhotoLibraryForm.images).length > 0 && (
-                      <div className="about-admin-gallery-preview">
-                        {parseGalleryImages(customPhotoLibraryForm.images).map((imageUrl, index) => (
-                          <img key={`${imageUrl}-${index}`} src={imageUrl} alt={`Photo ajoutée ${index + 1}`} />
-                        ))}
-                      </div>
-                    )}
-                    <div className="about-admin-actions">
-                      <button type="submit" className="primary-action">
-                        Enregistrer la bibliothèque photos
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-action"
-                        onClick={() => setCustomPhotoLibraryForm(customPhotoLibrary)}
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
-                </form>
 
                 <form className="about-admin-form home-featured-admin-form" onSubmit={saveHomeFeaturedEvent}>
                   <div className="about-admin-block">
                     <div className="home-featured-admin-help">
                       <div>
                         <strong>Page dédiée côté client</strong>
-                        <span>Le bouton “Voir la page événement” apparaît maintenant automatiquement dans l'encadré de l'accueil.</span>
+                        <span>Le bouton “Voir la page événement” apparaît automatiquement dans l'encadré de l'accueil.</span>
                       </div>
                       <button type="button" className="secondary-action" onClick={() => setScreen("event")}>
                         Prévisualiser la page
@@ -13535,6 +17149,69 @@ function openTutorialFromPage(guideId) {
                     </div>
                   </div>
                 </form>
+              </section>
+
+              <section className="admin-products-panel about-admin-panel" data-section="content">
+                <div className="admin-panel-title">
+                  <span><Leaf size={24} /></span>
+                  <div>
+                    <h2>Présentation et accueil</h2>
+                    <p>Gérez la bibliothèque photos et les textes de présentation de la page La ferme.</p>
+                  </div>
+                </div>
+
+                <form className="about-admin-form photo-library-admin" onSubmit={saveCustomPhotoLibrary}>
+                  <div className="about-admin-block">
+                    <div className="home-featured-admin-help">
+                      <div>
+                        <strong>Bibliothèque photos</strong>
+                        <span>Les photos du dossier /public/images sont ajoutées automatiquement après redéploiement. Utilisez ce bloc surtout pour ajouter un lien externe ou une photo spéciale.</span>
+                      </div>
+                      <span className="photo-library-admin__count">{imageOptions.length} photo(s)</span>
+                    </div>
+                    <label>
+                      <span>Ajouter une photo</span>
+                      <div className="photo-library-admin__add">
+                        <input
+                          value={customPhotoInput}
+                          onChange={(e) => setCustomPhotoInput(e.target.value)}
+                          placeholder="/images/ma-photo.jpg ou lien complet"
+                        />
+                        <button type="button" className="secondary-action" onClick={addCustomPhotoToLibrary}>
+                          Ajouter
+                        </button>
+                      </div>
+                    </label>
+                    <label>
+                      <span>Photos ajoutées depuis l'admin</span>
+                      <textarea
+                        value={customPhotoLibraryForm.images}
+                        onChange={(e) => setCustomPhotoLibraryForm({ ...customPhotoLibraryForm, images: e.target.value })}
+                        placeholder="Un chemin ou lien par ligne"
+                        rows="5"
+                      />
+                    </label>
+                    {parseGalleryImages(customPhotoLibraryForm.images).length > 0 && (
+                      <div className="about-admin-gallery-preview">
+                        {parseGalleryImages(customPhotoLibraryForm.images).map((imageUrl, index) => (
+                          <img key={`${imageUrl}-${index}`} src={imageUrl} alt={`Photo ajoutée ${index + 1}`} />
+                        ))}
+                      </div>
+                    )}
+                    <div className="about-admin-actions">
+                      <button type="submit" className="primary-action">
+                        Enregistrer la bibliothèque photos
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={() => setCustomPhotoLibraryForm(customPhotoLibrary)}
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                </form>
 
                 <form className="about-admin-form" onSubmit={saveAboutContent}>
                   <label>
@@ -13641,6 +17318,25 @@ function openTutorialFromPage(guideId) {
           </section>
         )}
       </main>
+      {selectedContractBooking && (
+        <KennelContractModal
+          booking={selectedContractBooking}
+          profile={customerProfiles.find(
+            (profile) => String(profile.email || "").trim().toLowerCase() === String(selectedContractBooking.client_email || "").trim().toLowerCase()
+          ) || (!isAdmin ? {
+            full_name: name,
+            email: currentUser?.email || "",
+            phone: profileForm.phone || selectedContractBooking.phone || "",
+            delivery_address: profileForm.deliveryAddress || deliveryAddress || "",
+          } : null)}
+          contract={kennelContracts.find((contract) => contract.booking_id === selectedContractBooking.id)}
+          amount={getKennelBookingAmount(selectedContractBooking)}
+          dailyRate={Number(getKennelDailyBillingService()?.price || 0)}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedContractBooking(null)}
+          onSign={(signedContract) => signKennelContract(selectedContractBooking, signedContract)}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,18 @@ entrypoint = "./functions/send-order-ready-email/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/send-order-ready-email/*.html" ]
 
+[functions.send-order-cancelled-email]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-order-cancelled-email/deno.json"
+entrypoint = "./functions/send-order-cancelled-email/index.ts"
+
+[functions.handle-contact-message]
+enabled = true
+verify_jwt = false
+import_map = "./functions/handle-contact-message/deno.json"
+entrypoint = "./functions/handle-contact-message/index.ts"
+
 [functions.send-admin-push]
 enabled = true
 verify_jwt = true
@@ -27,3 +39,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/send-broadcast-announcement/deno.json"
 entrypoint = "./functions/send-broadcast-announcement/index.ts"
+
+[functions.send-daily-payment-summary-email]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-daily-payment-summary-email/deno.json"
+entrypoint = "./functions/send-daily-payment-summary-email/index.ts"
+
+[functions.send-egg-order-reminders]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-egg-order-reminders/deno.json"
+entrypoint = "./functions/send-egg-order-reminders/index.ts"

@@ -35,9 +35,12 @@ serve(async (req) => {
         },
       },
     });
+    const body = await req.json();
+    const isOccasionalSaleNotification = Boolean(body.occasionalSaleReservationId);
     const { data: userData } = await authClient.auth.getUser();
+    const currentUser = userData.user ?? null;
 
-    if (!userData.user) {
+    if (!currentUser && !isOccasionalSaleNotification) {
       return new Response(JSON.stringify({ error: "Non autorise." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -48,19 +51,23 @@ serve(async (req) => {
     const { data: profile } = await adminClient
       .from("profiles")
       .select("is_admin")
-      .eq("id", userData.user.id)
+      .eq("id", currentUser?.id || "00000000-0000-0000-0000-000000000000")
       .maybeSingle();
 
     const isAdmin = profile?.is_admin === true;
-    const body = await req.json();
     let title = "Nouvelle commande";
     let message = "Une nouvelle commande vient d'etre passee.";
     let url = "/";
+    let notificationActionType = "notification_custom";
+    let notificationTargetType = "Notification";
+    let notificationTargetId: string | null = null;
+    let notificationTargetLabel = "";
+    let notificationDetails: Record<string, unknown> = {};
 
     if (body.orderId) {
       const { data: order, error: orderError } = await adminClient
         .from("orders")
-        .select("id, user_id, client_name, delivery_date, items, box6, box12")
+        .select("id, user_id, client_name, client_email, delivery_date, status, items, box6, box12")
         .eq("id", body.orderId)
         .single();
 
@@ -71,7 +78,7 @@ serve(async (req) => {
         });
       }
 
-      if (!isAdmin && order.user_id !== userData.user.id) {
+      if (!isAdmin && order.user_id !== currentUser?.id) {
         return new Response(JSON.stringify({ error: "Acces refuse pour cette commande." }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -89,10 +96,129 @@ serve(async (req) => {
         : "Commande";
 
       message = `${order.client_name || "Client"} - ${summary} - ${order.delivery_date || "date a confirmer"}`;
+      notificationTargetType = "Commande";
+      notificationTargetId = String(order.id);
+      notificationTargetLabel = order.client_name || order.client_email || "Commande";
+      notificationDetails = { date: order.delivery_date, resume: summary, statut: order.status || "" };
+
+      if (body.eventType === "order_cancelled" || String(order.status || "").toLowerCase().startsWith("annul")) {
+        title = "Commande annulee";
+        message = `${order.client_name || "Client"} a annule une commande - ${summary} - ${order.delivery_date || "date a confirmer"}`;
+        notificationActionType = "notification_order_cancelled";
+      } else {
+        notificationActionType = "notification_order_created";
+      }
+    } else if (body.educationBookingId) {
+      const { data: booking, error: bookingError } = await adminClient
+        .from("educational_bookings")
+        .select("id, user_id, activity_type, booking_date, participants, client_name, phone")
+        .eq("id", body.educationBookingId)
+        .single();
+
+      if (bookingError || !booking) {
+        return new Response(JSON.stringify({ error: "Reservation ferme introuvable." }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!isAdmin && booking.user_id !== currentUser?.id) {
+        return new Response(JSON.stringify({ error: "Acces refuse pour cette reservation." }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      title = "Nouvelle reservation ferme";
+      message = `${booking.client_name || "Client"} - ${booking.activity_type || "Activite"} - ${booking.booking_date || "date a confirmer"} - ${booking.participants || 1} participant(s)`;
+      notificationActionType = "notification_education_booking";
+      notificationTargetType = "Reservation ferme";
+      notificationTargetId = String(booking.id);
+      notificationTargetLabel = booking.client_name || booking.activity_type || "Reservation ferme";
+      notificationDetails = {
+        activite: booking.activity_type || "",
+        date: booking.booking_date || "",
+        participants: booking.participants || 1,
+        telephone: booking.phone || "",
+      };
+    } else if (body.kennelBookingId) {
+      const { data: booking, error: bookingError } = await adminClient
+        .from("kennel_bookings")
+        .select("id, user_id, dog_id, client_name, start_date, end_date, phone")
+        .eq("id", body.kennelBookingId)
+        .single();
+
+      if (bookingError || !booking) {
+        return new Response(JSON.stringify({ error: "Reservation pension introuvable." }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!isAdmin && booking.user_id !== currentUser?.id) {
+        return new Response(JSON.stringify({ error: "Acces refuse pour cette reservation." }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let dogName = "Chien";
+
+      if (booking.dog_id) {
+        const { data: dog } = await adminClient
+          .from("dogs")
+          .select("name")
+          .eq("id", booking.dog_id)
+          .maybeSingle();
+
+        dogName = dog?.name || dogName;
+      }
+
+      title = "Nouvelle reservation pension";
+      message = `${booking.client_name || "Client"} - ${dogName} - du ${booking.start_date || "date a confirmer"} au ${booking.end_date || "date a confirmer"}`;
+      notificationActionType = "notification_kennel_booking";
+      notificationTargetType = "Reservation pension";
+      notificationTargetId = String(booking.id);
+      notificationTargetLabel = `${booking.client_name || "Client"} - ${dogName}`;
+      notificationDetails = {
+        chien: dogName,
+        arrivee: booking.start_date || "",
+        depart: booking.end_date || "",
+        telephone: booking.phone || "",
+      };
+    } else if (body.occasionalSaleReservationId) {
+      const { data: reservation, error: reservationError } = await adminClient
+        .from("occasional_sale_reservations")
+        .select("id, item_id, item_name, quantity, client_name, client_email, phone, notes, status, created_at")
+        .eq("id", body.occasionalSaleReservationId)
+        .single();
+
+      if (reservationError || !reservation) {
+        return new Response(JSON.stringify({ error: "Reservation vente ponctuelle introuvable." }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      title = "Nouvelle reservation vente";
+      message = `${reservation.client_name || "Client"} - ${reservation.quantity || 1} x ${reservation.item_name || "Vente ponctuelle"}`;
+      notificationActionType = "notification_occasional_sale";
+      notificationTargetType = "Vente ponctuelle";
+      notificationTargetId = String(reservation.id);
+      notificationTargetLabel = `${reservation.client_name || "Client"} - ${reservation.item_name || "Vente ponctuelle"}`;
+      notificationDetails = {
+        produit: reservation.item_name || "",
+        quantite: reservation.quantity || 1,
+        telephone: reservation.phone || "",
+        email: reservation.client_email || "",
+        statut: reservation.status || "Nouvelle",
+        message: reservation.notes || "",
+      };
     } else if (isAdmin) {
       title = body.title || title;
       message = body.body || message;
       url = body.url || url;
+      notificationDetails = { message };
     } else {
       return new Response(JSON.stringify({ error: "Commande requise." }), {
         status: 403,
@@ -104,6 +230,17 @@ serve(async (req) => {
       title,
       body: message,
       url,
+    });
+
+    await adminClient.from("admin_action_logs").insert({
+      action_type: notificationActionType,
+      title,
+      target_type: notificationTargetType,
+      target_id: notificationTargetId,
+      target_label: notificationTargetLabel,
+      details: notificationDetails,
+      created_by: currentUser?.id || null,
+      created_by_email: currentUser?.email || "",
     });
 
     const { data: subscriptions, error } = await adminClient

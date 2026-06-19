@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Tutoriel installer l'application - Les Poulettes du Marais</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff8ec; color: #173a26; font-family: "Segoe UI", Arial, sans-serif; line-height: 1.35; }
+    .page { min-height: 273mm; padding: 16mm; page-break-after: always; position: relative; overflow: hidden; border-radius: 18px; background: linear-gradient(135deg, rgba(255,253,246,.98), rgba(232,243,226,.94)); }
+    .page::after { content: ""; position: absolute; right: -30mm; bottom: -34mm; width: 110mm; height: 110mm; border-radius: 50%; background: rgba(23,58,38,.12); }
+    .content { position: relative; z-index: 1; display: grid; gap: 14px; }
+    .cover { align-content: center; text-align: center; }
+    .logo { width: 42mm; height: 42mm; object-fit: contain; border-radius: 50%; margin: 0 auto 8mm; filter: drop-shadow(0 10px 18px rgba(55,42,20,.18)); }
+    .eyebrow { margin: 0; color: #8a4318; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+    h1,h2,h3 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0; }
+    h1 { margin: 0; font-size: 48px; line-height: .98; }
+    h2 { margin: 0; font-size: 34px; line-height: 1.05; }
+    h3 { margin: 0; font-size: 21px; color: #173a26; }
+    .subtitle { width: min(150mm, 100%); margin: 7mm auto 0; color: #3e4938; font-size: 18px; font-weight: 700; }
+    .quick-start,.memo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12mm; }
+    .memo-grid { grid-template-columns: repeat(2, 1fr); margin-top: 0; }
+    .pill,.card,.tip,.checklist { border: 1px solid rgba(67,63,45,.13); background: rgba(255,253,247,.94); box-shadow: 0 10px 24px rgba(34,31,18,.08); }
+    .pill { border-radius: 18px; padding: 12px; text-align: left; }
+    .pill strong { display: block; font-size: 18px; }
+    .pill span { color: #5c5549; font-weight: 700; font-size: 13px; }
+    .step-grid { display: grid; gap: 12px; }
+    .card { display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: start; border-radius: 18px; padding: 14px; }
+    .number { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: #ffd942; color: #173a26; font-size: 22px; font-weight: 950; }
+    .card p { margin: 5px 0 0; color: #4c473b; font-size: 15px; font-weight: 650; }
+    .two-cols { display: grid; grid-template-columns: 1fr 62mm; gap: 14px; align-items: start; }
+    .phone { border: 7px solid #173a26; border-radius: 26px; background: #fffdf8; padding: 12px; min-height: 116mm; box-shadow: 0 18px 38px rgba(34,31,18,.18); }
+    .screen { display: grid; gap: 9px; }
+    .screen-bar { height: 13px; border-radius: 999px; background: #e8dcc0; }
+    .screen-button { min-height: 34px; border-radius: 12px; background: #173a26; color: white; display: grid; align-items: center; padding: 0 12px; font-weight: 900; font-size: 13px; }
+    .screen-button.light { border: 1px solid rgba(67,63,45,.15); background: #fff4cb; color: #173a26; }
+    .tip,.checklist { border-radius: 18px; padding: 14px; }
+    .tip { background: #fff4cb; }
+    .tip strong { display: block; margin-bottom: 4px; color: #7a3c1b; font-size: 16px; }
+    .tip p,.checklist li { margin: 0; color: #4c473b; font-weight: 700; }
+    .checklist ul { margin: 8px 0 0; padding-left: 0; list-style: none; display: grid; gap: 8px; }
+    .checklist li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+    .check { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #173a26; color: white; font-size: 13px; font-weight: 900; }
+    .big-action { border-radius: 20px; background: #173a26; color: #fffdf8; padding: 18px; text-align: center; font-weight: 900; font-size: 22px; box-shadow: 0 16px 34px rgba(34,31,18,.16); }
+    .footer { position: absolute; left: 16mm; right: 16mm; bottom: 10mm; z-index: 1; display: flex; justify-content: space-between; color: #746a5a; font-size: 11px; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <section class="page cover">
+    <div class="content">
+      <img class="logo" src="../logo-poulettes.png" alt="Les Poulettes du Marais" />
+      <p class="eyebrow">Mode d'emploi client</p>
+      <h1>Installer l'appli sur votre t&eacute;l&eacute;phone</h1>
+      <p class="subtitle">Un guide tr&egrave;s simple pour ajouter Les Poulettes du Marais sur l'&eacute;cran d'accueil de votre t&eacute;l&eacute;phone.</p>
+      <div class="quick-start">
+        <div class="pill"><strong>1. Ouvrez le site</strong><span>Depuis Safari sur iPhone ou Chrome sur Android.</span></div>
+        <div class="pill"><strong>2. Ajoutez l'appli</strong><span>Utilisez le bouton de partage ou le menu du navigateur.</span></div>
+        <div class="pill"><strong>3. Retrouvez l'ic&ocirc;ne</strong><span>L'appli appara&icirc;t sur votre &eacute;cran d'accueil.</span></div>
+      </div>
+    </div>
+    <div class="footer"><span>Les Poulettes du Marais</span><span>Page 1</span></div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <p class="eyebrow">iPhone</p>
+      <h2>Installer depuis Safari</h2>
+      <div class="two-cols">
+        <div class="step-grid">
+          <div class="card"><span class="number">1</span><div><h3>Ouvrez Safari</h3><p>Sur iPhone, utilisez Safari. C'est le navigateur le plus adapt&eacute; pour ajouter l'appli &agrave; l'&eacute;cran d'accueil.</p></div></div>
+          <div class="card"><span class="number">2</span><div><h3>Ouvrez le site</h3><p>Rendez-vous sur Les Poulettes du Marais depuis l'adresse habituelle du site.</p></div></div>
+          <div class="card"><span class="number">3</span><div><h3>Appuyez sur Partager</h3><p>C'est le bouton carr&eacute; avec une fl&egrave;che vers le haut, souvent en bas de l'&eacute;cran.</p></div></div>
+          <div class="card"><span class="number">4</span><div><h3>Ajoutez &agrave; l'&eacute;cran d'accueil</h3><p>Choisissez &ldquo;Sur l'&eacute;cran d'accueil&rdquo;, puis validez avec &ldquo;Ajouter&rdquo;.</p></div></div>
+        </div>
+        <div class="phone"><div class="screen"><div class="screen-bar"></div><div class="screen-button light">Safari</div><div class="screen-button">lespoulettesdumarais.fr</div><div class="screen-button light">Partager</div><div class="screen-button">Sur l'&eacute;cran d'accueil</div><div class="screen-button">Ajouter</div></div></div>
+      </div>
+      <div class="tip"><strong>Si vous ne voyez pas l'option</strong><p>V&eacute;rifiez que vous &ecirc;tes bien dans Safari, puis faites d&eacute;filer le menu de partage vers le bas.</p></div>
+    </div>
+    <div class="footer"><span>Installation iPhone</span><span>Page 2</span></div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <p class="eyebrow">Android</p>
+      <h2>Installer depuis Chrome</h2>
+      <div class="two-cols">
+        <div class="step-grid">
+          <div class="card"><span class="number">1</span><div><h3>Ouvrez Chrome</h3><p>Sur Android, utilisez Chrome pour installer l'appli facilement.</p></div></div>
+          <div class="card"><span class="number">2</span><div><h3>Ouvrez le site</h3><p>Rendez-vous sur Les Poulettes du Marais depuis l'adresse habituelle du site.</p></div></div>
+          <div class="card"><span class="number">3</span><div><h3>Ouvrez le menu</h3><p>Appuyez sur les trois petits points en haut &agrave; droite de Chrome.</p></div></div>
+          <div class="card"><span class="number">4</span><div><h3>Installez l'appli</h3><p>Choisissez &ldquo;Installer l'application&rdquo; ou &ldquo;Ajouter &agrave; l'&eacute;cran d'accueil&rdquo;, puis validez.</p></div></div>
+        </div>
+        <div class="phone"><div class="screen"><div class="screen-bar"></div><div class="screen-button light">Chrome</div><div class="screen-button">lespoulettesdumarais.fr</div><div class="screen-button light">Menu</div><div class="screen-button">Installer l'application</div><div class="screen-button">Ajouter</div></div></div>
+      </div>
+      <div class="tip"><strong>Astuce</strong><p>Si Chrome propose directement une petite banni&egrave;re &ldquo;Installer&rdquo;, vous pouvez toucher ce bouton.</p></div>
+    </div>
+    <div class="footer"><span>Installation Android</span><span>Page 3</span></div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <p class="eyebrow">M&eacute;mo rapide</p>
+      <h2>Une fois l'appli install&eacute;e</h2>
+      <div class="memo-grid">
+        <div class="checklist"><h3>&Agrave; retenir</h3><ul><li><span class="check">OK</span><span>L'ic&ocirc;ne se trouve sur l'&eacute;cran d'accueil du t&eacute;l&eacute;phone.</span></li><li><span class="check">OK</span><span>Vous ouvrez ensuite l'appli comme une application classique.</span></li><li><span class="check">OK</span><span>Connectez-vous &agrave; votre compte pour retrouver vos commandes et r&eacute;servations.</span></li></ul></div>
+        <div class="checklist"><h3>Pour ne rien manquer</h3><ul><li><span class="check">OK</span><span>Activez les notifications quand l'appli vous le propose.</span></li><li><span class="check">OK</span><span>Gardez votre t&eacute;l&eacute;phone connect&eacute; &agrave; Internet lors de la premi&egrave;re ouverture.</span></li><li><span class="check">OK</span><span>Si l'appli ne se met pas &agrave; jour, utilisez le bouton de v&eacute;rification des mises &agrave; jour.</span></li></ul></div>
+      </div>
+      <div class="big-action">Votre raccourci est pr&ecirc;t : vous pouvez commander ou r&eacute;server plus facilement.</div>
+    </div>
+    <div class="footer"><span>M&eacute;mo installation</span><span>Page 4</span></div>
+  </section>
+</body>
+</html>

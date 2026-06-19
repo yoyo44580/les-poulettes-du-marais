@@ -31,10 +31,10 @@ values
   ),
   (
     'overnight',
-    'Nuitée pension',
-    'Séjour avec nuitée, fiche chien et habitudes à préciser.',
+    'Journée pension',
+    'Séjour facturé à la journée, fiche chien et habitudes à préciser.',
     0,
-    'nuit',
+    'jour',
     true,
     20
   ),
