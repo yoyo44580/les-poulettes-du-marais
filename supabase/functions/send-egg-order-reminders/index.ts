@@ -80,6 +80,9 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  let runClient: ReturnType<typeof createClient> | null = null;
+  let runId = "";
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -105,6 +108,15 @@ serve(async (req) => {
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    runClient = adminClient;
+    const requestBody = await req.json().catch(() => ({}));
+    const triggerSource = requestBody?.triggerSource === "manual" ? "manual" : "scheduled";
+    const { data: runRow } = await adminClient
+      .from("automation_runs")
+      .insert({ automation_key: "egg_reminders", trigger_source: triggerSource })
+      .select("id")
+      .maybeSingle();
+    runId = String(runRow?.id || "");
     const todayIso = getParisIsoDate();
     const historyStart = addDays(todayIso, -HISTORY_DAYS);
     const recentHabitStart = addDays(todayIso, -RECENT_HABIT_DAYS);
@@ -185,6 +197,12 @@ serve(async (req) => {
     }
 
     if (candidates.length === 0) {
+      if (runId) {
+        await adminClient
+          .from("automation_runs")
+          .update({ status: "success", finished_at: new Date().toISOString(), details: { candidates: 0 } })
+          .eq("id", runId);
+      }
       return new Response(JSON.stringify({ success: true, candidates: 0, sent: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -291,11 +309,36 @@ serve(async (req) => {
       if (insertError) throw insertError;
     }
 
+    if (runId) {
+      await adminClient
+        .from("automation_runs")
+        .update({
+          status: failedDeliveries > 0 && logRows.length === 0 ? "failed" : "success",
+          finished_at: new Date().toISOString(),
+          processed_count: logRows.length,
+          failed_count: failedDeliveries,
+          details: { candidates: candidates.length },
+          error_message: failedDeliveries > 0 && logRows.length === 0 ? "Aucun rappel n'a pu etre envoye." : null,
+        })
+        .eq("id", runId);
+    }
+
     return new Response(
       JSON.stringify({ success: true, candidates: candidates.length, sent: logRows.length, failed: failedDeliveries }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    if (runClient && runId) {
+      await runClient
+        .from("automation_runs")
+        .update({
+          status: "failed",
+          finished_at: new Date().toISOString(),
+          failed_count: 1,
+          error_message: error instanceof Error ? error.message : "Erreur inconnue.",
+        })
+        .eq("id", runId);
+    }
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erreur inconnue." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

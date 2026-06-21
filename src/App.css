@@ -5745,6 +5745,7 @@ button {
 .admin-grid[data-admin-view="accounting"] > :not([data-section="accounting"]),
 .admin-grid[data-admin-view="statistics"] > :not([data-section="statistics"]),
 .admin-grid[data-admin-view="traffic"] > :not([data-section="traffic"]),
+.admin-grid[data-admin-view="automations"] > :not([data-section="automations"]),
 .admin-grid[data-admin-view="cancellations"] > :not([data-section="cancellations"]),
 .admin-grid[data-admin-view="content"] > :not([data-section="content"]),
 .admin-grid[data-admin-view="settings"] > :not([data-section="settings"]) {
@@ -9607,6 +9608,212 @@ button {
 .admin-health-list {
   display: grid;
   gap: 10px;
+}
+
+.admin-automations-panel {
+  grid-column: 1 / -1;
+}
+
+.automation-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.automation-status-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #d7dfd8;
+  border-left-width: 5px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.automation-status-card--success { border-left-color: #2f7d4a; }
+.automation-status-card--warning { border-left-color: #d68b16; }
+.automation-status-card--danger { border-left-color: #c43d3d; }
+.automation-status-card--info { border-left-color: #4285a4; }
+
+.automation-status-card__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.automation-status-card__heading h3,
+.automation-status-card__heading p {
+  margin: 0;
+}
+
+.automation-status-card__heading h3 {
+  font-size: 1rem;
+}
+
+.automation-status-card__heading p {
+  margin-top: 5px;
+  color: #5c675f;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.automation-status-card__indicator {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #4285a4;
+}
+
+.automation-status-card--success .automation-status-card__indicator { background: #2f7d4a; }
+.automation-status-card--warning .automation-status-card__indicator { background: #d68b16; }
+.automation-status-card--danger .automation-status-card__indicator { background: #c43d3d; }
+
+.automation-status-card__facts {
+  display: grid;
+  gap: 8px;
+}
+
+.automation-status-card__facts span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #687169;
+  font-size: 0.82rem;
+}
+
+.automation-status-card__facts strong {
+  overflow-wrap: anywhere;
+  color: #24352a;
+  text-align: right;
+}
+
+.automation-status-card__alert {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #fff3e1;
+  color: #854d0e;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.automation-status-card--danger .automation-status-card__alert {
+  background: #fff0f0;
+  color: #9e2828;
+}
+
+.automation-status-card > button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.automation-history {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #dfe5df;
+}
+
+.automation-history__title h3,
+.automation-history__title p {
+  margin: 0;
+}
+
+.automation-history__title p {
+  margin-top: 4px;
+  color: #687169;
+}
+
+.automation-history__list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.automation-history-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e0e5e0;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.automation-history-row__status { color: #d68b16; }
+.automation-history-row--success .automation-history-row__status { color: #2f7d4a; }
+.automation-history-row--failed .automation-history-row__status { color: #c43d3d; }
+
+.automation-history-row div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.automation-history-row div span,
+.automation-history-row div em {
+  color: #687169;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.automation-history-row div em { color: #a52f2f; }
+
+.automation-history-row > b {
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.is-spinning {
+  animation: automation-spin 1s linear infinite;
+}
+
+@keyframes automation-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lazy-panel-loading {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(20, 35, 25, 0.72);
+  color: #fff;
+  font-weight: 800;
+}
+
+@media (max-width: 920px) {
+  .automation-status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .automation-status-card {
+    padding: 14px;
+  }
+
+  .automation-history-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .automation-history-row > b {
+    grid-column: 2;
+    white-space: normal;
+  }
 }
 
 .admin-health-card {

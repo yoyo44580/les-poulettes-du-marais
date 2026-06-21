@@ -177,6 +177,9 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  let runClient: ReturnType<typeof createClient> | null = null;
+  let runId = "";
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -199,6 +202,15 @@ serve(async (req) => {
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    runClient = adminClient;
+    const requestBody = await req.json().catch(() => ({}));
+    const triggerSource = requestBody?.triggerSource === "manual" ? "manual" : "scheduled";
+    const { data: runRow } = await adminClient
+      .from("automation_runs")
+      .insert({ automation_key: "daily_payments", trigger_source: triggerSource })
+      .select("id")
+      .maybeSingle();
+    runId = String(runRow?.id || "");
 
     const { data: services, error: servicesError } = await adminClient
       .from("kennel_services")
@@ -279,11 +291,34 @@ serve(async (req) => {
       created_by_email: "system",
     });
 
+    if (runId) {
+      await adminClient
+        .from("automation_runs")
+        .update({
+          status: "success",
+          finished_at: new Date().toISOString(),
+          processed_count: unpaidItems.length,
+          details: { unpaid_count: unpaidItems.length, total_remaining: totalRemaining },
+        })
+        .eq("id", runId);
+    }
+
     return new Response(JSON.stringify({ sent: true, unpaidCount: unpaidItems.length, totalRemaining, email: data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    if (runClient && runId) {
+      await runClient
+        .from("automation_runs")
+        .update({
+          status: "failed",
+          finished_at: new Date().toISOString(),
+          failed_count: 1,
+          error_message: error instanceof Error ? error.message : "Erreur inconnue.",
+        })
+        .eq("id", runId);
+    }
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erreur inconnue." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

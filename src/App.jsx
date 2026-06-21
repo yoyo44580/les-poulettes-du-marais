@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, BellRing, Smartphone, Image as ImageIcon } from "lucide-react";
-import KennelContractModal from "./KennelContractModal";
 import "./App.css";
+
+const KennelContractModal = lazy(() => import("./KennelContractModal"));
 
 const canUseBrowser = typeof window !== "undefined";
 const isEggSummarySubdomain =
@@ -1023,6 +1024,8 @@ export default function EggSalesPWA() {
   const [adminReminders, setAdminReminders] = useState([]);
   const [adminReminderForm, setAdminReminderForm] = useState(emptyAdminReminderForm);
   const [adminActionLogs, setAdminActionLogs] = useState([]);
+  const [automationRuns, setAutomationRuns] = useState([]);
+  const [automationRunningKey, setAutomationRunningKey] = useState("");
   const [adminNotificationFilter, setAdminNotificationFilter] = useState("unread");
   const [preparedMessageKinds, setPreparedMessageKinds] = useState({});
   const [announcementForm, setAnnouncementForm] = useState(emptyAnnouncementForm);
@@ -2190,6 +2193,7 @@ if (missingProfileContact) {
       await loadContactMessages();
       await loadAdminReminders();
       await loadAdminActionLogs();
+      await loadAutomationRuns();
       await loadAnnouncementHistory();
       await loadAppSettings();
       await loadOccasionalSaleReservations();
@@ -2328,6 +2332,7 @@ const profile = profiles[0];
     await loadContactMessages();
     await loadAdminReminders();
     await loadAdminActionLogs();
+    await loadAutomationRuns();
     await loadAnnouncementHistory();
     await loadOccasionalSaleReservations();
     await loadTrafficEvents();
@@ -2788,6 +2793,40 @@ async function loadAdminActionLogs() {
   }
 
   setAdminActionLogs(data || []);
+}
+
+async function loadAutomationRuns() {
+  const { data, error } = await supabase
+    .from("automation_runs")
+    .select("*")
+    .order("started_at", { ascending: false })
+    .limit(60);
+
+  if (error) {
+    console.warn("Suivi des automatismes indisponible.", error.message);
+    return;
+  }
+
+  setAutomationRuns(data || []);
+}
+
+async function runAdminAutomation(automationKey) {
+  if (automationRunningKey) return;
+
+  setAutomationRunningKey(automationKey);
+  const { error } = await supabase.functions.invoke("run-admin-automation", {
+    body: { automationKey },
+  });
+  setAutomationRunningKey("");
+
+  if (error) {
+    showToast("Impossible de relancer cet automatisme : " + error.message);
+    await loadAutomationRuns();
+    return;
+  }
+
+  await Promise.all([loadAutomationRuns(), loadAdminActionLogs()]);
+  showToast("Automatisme relancé avec succès.");
 }
 
 async function logAdminAction({ actionType, title, targetType = "", targetId = null, targetLabel = "", details = {} }) {
@@ -7884,6 +7923,43 @@ const healthCheckCounts = healthChecks.reduce(
   { danger: 0, warning: 0, info: 0, success: 0, total: 0 }
 );
 const healthIssueCount = healthCheckCounts.danger + healthCheckCounts.warning;
+const automationFreshnessLimit = new Date(
+  Date.parse(`${todayIso}T00:00:00Z`) - 36 * 60 * 60 * 1000
+).toISOString();
+const automationCards = [
+  {
+    key: "daily_payments",
+    title: "Email quotidien des impayés",
+    description: "Envoie chaque matin la liste des séjours pension restant à régler.",
+  },
+  {
+    key: "egg_reminders",
+    title: "Rappels de commande d'œufs",
+    description: "Prévient les clients habituels 48 h et 24 h avant leur jour de commande.",
+  },
+  {
+    key: "google_reviews",
+    title: "Demandes d'avis Google",
+    description: "Propose un avis après une activité ferme ou un séjour pension terminé.",
+  },
+].map((automation) => {
+  const latestRun = automationRuns.find((run) => run.automation_key === automation.key) || null;
+  const isStale = Boolean(latestRun?.started_at && latestRun.started_at < automationFreshnessLimit);
+  const tone = !latestRun
+    ? "info"
+    : latestRun.status === "failed"
+    ? "danger"
+    : latestRun.status === "running"
+    ? "warning"
+    : isStale
+    ? "warning"
+    : "success";
+
+  return { ...automation, latestRun, isStale, tone };
+});
+const automationIssueCount = automationCards.filter((automation) =>
+  ["danger", "warning"].includes(automation.tone)
+).length;
 const adminAssistantTodayItems = [
   {
     id: "assistant-orders-today",
@@ -12148,6 +12224,7 @@ function openTutorialFromPage(guideId) {
                     await loadContactMessages();
                     await loadAdminReminders();
                     await loadAdminActionLogs();
+                    await loadAutomationRuns();
                     await loadAnnouncementHistory();
                     await loadAboutContent();
                     await loadHomeFeaturedEvent();
@@ -12335,6 +12412,7 @@ function openTutorialFromPage(guideId) {
                     { value: "cancellations", label: "Annulations" },
                     { value: "statistics", label: "Statistiques" },
                     { value: "traffic", label: "Trafic" },
+                    { value: "automations", label: "Automatismes" },
                     { value: "audit", label: "Journal" },
                     { value: "settings", label: "Réglages" },
                   ],
@@ -12374,6 +12452,11 @@ function openTutorialFromPage(guideId) {
                         {tab.value === "health" && healthIssueCount > 0 && (
                           <span className={`admin-tab-badge admin-tab-badge--${healthCheckCounts.danger > 0 ? "danger" : "warning"}`}>
                             {healthIssueCount}
+                          </span>
+                        )}
+                        {tab.value === "automations" && automationIssueCount > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {automationIssueCount}
                           </span>
                         )}
                       </button>
@@ -14604,6 +14687,93 @@ function openTutorialFromPage(guideId) {
                       </button>
                     </article>
                   ))}
+                </div>
+              </section>
+
+              <section className="admin-products-panel admin-automations-panel" data-section="automations">
+                <div className="admin-panel-title admin-panel-title--row">
+                  <span><RefreshCw size={24} /></span>
+                  <div>
+                    <h2>Centre des automatismes</h2>
+                    <p>Contrôlez les emails et rappels programmés, puis relancez-les immédiatement si nécessaire.</p>
+                  </div>
+                  <button type="button" onClick={loadAutomationRuns}>
+                    <RefreshCw size={18} /> Actualiser
+                  </button>
+                </div>
+
+                <div className="automation-status-grid">
+                  {automationCards.map((automation) => {
+                    const run = automation.latestRun;
+                    const isRunning = automationRunningKey === automation.key || run?.status === "running";
+                    return (
+                      <article key={automation.key} className={`automation-status-card automation-status-card--${automation.tone}`}>
+                        <div className="automation-status-card__heading">
+                          <span className="automation-status-card__indicator" aria-hidden="true" />
+                          <div>
+                            <h3>{automation.title}</h3>
+                            <p>{automation.description}</p>
+                          </div>
+                        </div>
+                        <div className="automation-status-card__facts">
+                          <span>
+                            Dernier passage
+                            <strong>{run?.started_at ? formatCreatedAtDateTime(run.started_at) : "Pas encore enregistré"}</strong>
+                          </span>
+                          <span>
+                            Résultat
+                            <strong>
+                              {!run ? "En attente" : run.status === "success" ? "Réussi" : run.status === "running" ? "En cours" : "Échec"}
+                            </strong>
+                          </span>
+                          <span>
+                            Éléments traités
+                            <strong>{Number(run?.processed_count || 0)}</strong>
+                          </span>
+                        </div>
+                        {automation.isStale && <p className="automation-status-card__alert">Aucun passage enregistré depuis plus de 36 heures.</p>}
+                        {run?.error_message && <p className="automation-status-card__alert">{run.error_message}</p>}
+                        <button
+                          type="button"
+                          onClick={() => runAdminAutomation(automation.key)}
+                          disabled={Boolean(automationRunningKey)}
+                        >
+                          <RefreshCw size={17} className={isRunning ? "is-spinning" : ""} />
+                          {isRunning ? "Relance en cours..." : "Relancer maintenant"}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="automation-history">
+                  <div className="automation-history__title">
+                    <div>
+                      <h3>Historique récent</h3>
+                      <p>Les derniers passages réussis ou en erreur.</p>
+                    </div>
+                  </div>
+                  <div className="automation-history__list">
+                    {automationRuns.slice(0, 15).map((run) => {
+                      const automation = automationCards.find((item) => item.key === run.automation_key);
+                      return (
+                        <article key={run.id} className={`automation-history-row automation-history-row--${run.status}`}>
+                          <span className="automation-history-row__status">
+                            {run.status === "success" ? <CheckCircle2 size={19} /> : run.status === "failed" ? <AlertTriangle size={19} /> : <RefreshCw size={19} className="is-spinning" />}
+                          </span>
+                          <div>
+                            <strong>{automation?.title || run.automation_key}</strong>
+                            <span>{formatCreatedAtDateTime(run.started_at)} · {run.trigger_source === "manual" ? "Relance manuelle" : "Passage programmé"}</span>
+                            {run.error_message && <em>{run.error_message}</em>}
+                          </div>
+                          <b>{Number(run.processed_count || 0)} traité{Number(run.processed_count || 0) > 1 ? "s" : ""}</b>
+                        </article>
+                      );
+                    })}
+                    {automationRuns.length === 0 && (
+                      <p className="admin-empty">L'historique commencera après le premier passage d'un automatisme.</p>
+                    )}
+                  </div>
                 </div>
               </section>
 
@@ -17319,23 +17489,25 @@ function openTutorialFromPage(guideId) {
         )}
       </main>
       {selectedContractBooking && (
-        <KennelContractModal
-          booking={selectedContractBooking}
-          profile={customerProfiles.find(
-            (profile) => String(profile.email || "").trim().toLowerCase() === String(selectedContractBooking.client_email || "").trim().toLowerCase()
-          ) || (!isAdmin ? {
-            full_name: name,
-            email: currentUser?.email || "",
-            phone: profileForm.phone || selectedContractBooking.phone || "",
-            delivery_address: profileForm.deliveryAddress || deliveryAddress || "",
-          } : null)}
-          contract={kennelContracts.find((contract) => contract.booking_id === selectedContractBooking.id)}
-          amount={getKennelBookingAmount(selectedContractBooking)}
-          dailyRate={Number(getKennelDailyBillingService()?.price || 0)}
-          isAdmin={isAdmin}
-          onClose={() => setSelectedContractBooking(null)}
-          onSign={(signedContract) => signKennelContract(selectedContractBooking, signedContract)}
-        />
+        <Suspense fallback={<div className="lazy-panel-loading" role="status">Chargement du contrat...</div>}>
+          <KennelContractModal
+            booking={selectedContractBooking}
+            profile={customerProfiles.find(
+              (profile) => String(profile.email || "").trim().toLowerCase() === String(selectedContractBooking.client_email || "").trim().toLowerCase()
+            ) || (!isAdmin ? {
+              full_name: name,
+              email: currentUser?.email || "",
+              phone: profileForm.phone || selectedContractBooking.phone || "",
+              delivery_address: profileForm.deliveryAddress || deliveryAddress || "",
+            } : null)}
+            contract={kennelContracts.find((contract) => contract.booking_id === selectedContractBooking.id)}
+            amount={getKennelBookingAmount(selectedContractBooking)}
+            dailyRate={Number(getKennelDailyBillingService()?.price || 0)}
+            isAdmin={isAdmin}
+            onClose={() => setSelectedContractBooking(null)}
+            onSign={(signedContract) => signKennelContract(selectedContractBooking, signedContract)}
+          />
+        </Suspense>
       )}
     </div>
   );

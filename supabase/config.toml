@@ -51,3 +51,15 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/send-egg-order-reminders/deno.json"
 entrypoint = "./functions/send-egg-order-reminders/index.ts"
+
+[functions.send-google-review-requests]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-google-review-requests/deno.json"
+entrypoint = "./functions/send-google-review-requests/index.ts"
+
+[functions.run-admin-automation]
+enabled = true
+verify_jwt = true
+import_map = "./functions/run-admin-automation/deno.json"
+entrypoint = "./functions/run-admin-automation/index.ts"

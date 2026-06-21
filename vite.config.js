@@ -56,6 +56,15 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         adminCommandesOeufs: resolve(__dirname, 'admin-commandes-oeufs.html'),
       },
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('lucide-react')) return 'icons'
+          if (id.includes('@supabase')) return 'supabase'
+          if (id.includes('react')) return 'react'
+          return 'vendor'
+        },
+      },
     },
   },
   plugins: [
