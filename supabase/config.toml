@@ -60,6 +60,6 @@ entrypoint = "./functions/send-google-review-requests/index.ts"
 
 [functions.run-admin-automation]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/run-admin-automation/deno.json"
 entrypoint = "./functions/run-admin-automation/index.ts"

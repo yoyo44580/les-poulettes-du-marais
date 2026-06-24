@@ -4,6 +4,7 @@ import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, 
 import "./App.css";
 
 const KennelContractModal = lazy(() => import("./KennelContractModal"));
+const BillingDocumentModal = lazy(() => import("./BillingDocumentModal"));
 
 const canUseBrowser = typeof window !== "undefined";
 const isEggSummarySubdomain =
@@ -26,6 +27,26 @@ const appBuildVersion = import.meta.env.VITE_APP_VERSION || "0.0.0";
 const appBuildTime = import.meta.env.VITE_APP_BUILD_TIME || "";
 const appCommitRef = import.meta.env.VITE_APP_COMMIT || "";
 const appShortCommit = appCommitRef ? appCommitRef.slice(0, 7) : "local";
+
+function getInitialPublicScreen() {
+  if (!canUseBrowser) {
+    return "home";
+  }
+
+  const path = window.location.pathname.replace(/\/+$/, "");
+  const params = new URLSearchParams(window.location.search);
+  const requestedScreen = params.get("screen") || params.get("page");
+
+  if (path === "/pension-canine" || requestedScreen === "pension-canine" || requestedScreen === "kennel") {
+    return "kennel";
+  }
+
+  if (requestedScreen && PUBLIC_SCREEN_LABELS[requestedScreen]) {
+    return requestedScreen;
+  }
+
+  return "home";
+}
 
 const AVAILABLE_IMAGE_OPTIONS = [
   "/images/ane-1.jpg",
@@ -128,6 +149,39 @@ const PUBLIC_SCREEN_LABELS = {
   confirmation: "Confirmation commande",
   myOrders: "Mes commandes",
   profile: "Mon profil",
+};
+
+const SEO_SCREEN_META = {
+  home: {
+    title: "Les Poulettes du Marais - Oeufs frais, ferme pédagogique et pension canine",
+    description:
+      "Les Poulettes du Marais à Bourneuf-en-Retz : commande d'oeufs frais, activités de ferme pédagogique et pension canine familiale.",
+  },
+  kennel: {
+    title: "Pension canine à Bourneuf-en-Retz - Les Poulettes du Marais",
+    description:
+      "Pension canine familiale à Bourneuf-en-Retz : accueil limité, suivi des disponibilités, espace climatisé pour le bien-être des chiens et réservation en ligne.",
+  },
+  education: {
+    title: "Ferme pédagogique à Bourneuf-en-Retz - Les Poulettes du Marais",
+    description:
+      "Activités de ferme pédagogique aux Poulettes du Marais : visites, animations enfants, anniversaires et découverte des animaux.",
+  },
+  shop: {
+    title: "Commande d'oeufs frais - Les Poulettes du Marais",
+    description:
+      "Commandez vos oeufs frais auprès des Poulettes du Marais et suivez vos demandes depuis votre espace client.",
+  },
+  contact: {
+    title: "Contact - Les Poulettes du Marais",
+    description:
+      "Contactez Les Poulettes du Marais pour une commande, une activité ferme pédagogique ou une réservation de pension canine.",
+  },
+  faq: {
+    title: "Aide et questions fréquentes - Les Poulettes du Marais",
+    description:
+      "Questions fréquentes pour commander des oeufs, réserver une activité ou préparer un séjour en pension canine.",
+  },
 };
 
 const TUTORIAL_GUIDES = [
@@ -864,6 +918,42 @@ function ReservationAccountGate({ subject, onLogin, onRegister }) {
   );
 }
 
+function formatBillingDocumentDateTime(value) {
+  if (!value) return "Date non renseignée";
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "Europe/Paris",
+  }).format(new Date(value));
+}
+
+function BillingDocumentsList({ documents, onOpen, compact = false }) {
+  const sourceLabels = {
+    order: "Commande d'œufs",
+    education: "Ferme pédagogique",
+    kennel: "Pension canine",
+  };
+
+  return (
+    <div className={`billing-document-list ${compact ? "is-compact" : ""}`}>
+      {documents.map((document) => (
+        <article key={document.id} className={document.document_type === "credit_note" ? "is-credit-note" : ""}>
+          <div>
+            <span>{document.document_type === "credit_note" ? "Avoir" : "Facture"}</span>
+            <strong>{document.document_number}</strong>
+            <em>{sourceLabels[document.source_type] || document.source_type} · {formatBillingDocumentDateTime(document.issued_at)}</em>
+          </div>
+          <b>{Number(document.total || 0).toFixed(2)} EUR</b>
+          <button type="button" onClick={() => onOpen(document)}>
+            <Download size={17} /> Voir le PDF
+          </button>
+        </article>
+      ))}
+      {documents.length === 0 && <p className="admin-empty">Aucune facture disponible pour le moment.</p>}
+    </div>
+  );
+}
+
 const clientOrderCancelWindowMs = 6 * 60 * 60 * 1000;
 
 function getClientOrderCancelInfo(order) {
@@ -895,16 +985,16 @@ function getClientOrderCancelInfo(order) {
 function getOrderStatusStep(status) {
   const normalizedStatus = normalizeOrderStatus(status || "À préparer");
 
+  if (normalizedStatus === "Annulée") {
+    return -1;
+  }
+
   if (normalizedStatus === "Livrée") {
     return 3;
   }
 
   if (normalizedStatus === "Prête") {
     return 2;
-  }
-
-  if (normalizedStatus === "Annulée") {
-    return 0;
   }
 
   return 1;
@@ -917,7 +1007,7 @@ export default function EggSalesPWA() {
   const isEggSummaryPage =
     isEggSummarySubdomain ||
     (canUseBrowser && window.location.pathname.replace(/\/+$/, "") === "/admin-commandes-oeufs");
-  const [screen, setScreen] = useState("home");
+  const [screen, setScreen] = useState(getInitialPublicScreen);
   const [activeTutorialId, setActiveTutorialId] = useState("eggs");
   const [isLogged, setIsLogged] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1010,6 +1100,8 @@ export default function EggSalesPWA() {
   const [kennelBookings, setKennelBookings] = useState([]);
   const [kennelContracts, setKennelContracts] = useState([]);
   const [selectedContractBooking, setSelectedContractBooking] = useState(null);
+  const [billingDocuments, setBillingDocuments] = useState([]);
+  const [selectedBillingDocument, setSelectedBillingDocument] = useState(null);
   const [kennelAvailability, setKennelAvailability] = useState([]);
   const [educationCalendarMonth, setEducationCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
   const [clientKennelCalendarMonth, setClientKennelCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
@@ -1019,6 +1111,10 @@ export default function EggSalesPWA() {
   const [kennelBlockedDates, setKennelBlockedDates] = useState([]);
   const [kennelBlockedDateForm, setKennelBlockedDateForm] = useState(emptyKennelBlockedDateForm);
   const [contactMessages, setContactMessages] = useState([]);
+  const [contactMessageReplies, setContactMessageReplies] = useState([]);
+  const [contactReplyDrafts, setContactReplyDrafts] = useState({});
+  const [clientConversationForm, setClientConversationForm] = useState({ subject: "", message: "" });
+  const [clientMessagesSeenAtByUser, setClientMessagesSeenAtByUser] = useState({});
   const [contactMessageArchiveView, setContactMessageArchiveView] = useState("active");
   const [contactForm, setContactForm] = useState(emptyContactForm);
   const [adminReminders, setAdminReminders] = useState([]);
@@ -1037,6 +1133,8 @@ export default function EggSalesPWA() {
   const [showUpdateNotice, setShowUpdateNotice] = useState(false);
   const [updateServiceWorker, setUpdateServiceWorker] = useState(null);
   const [checkingAppUpdate, setCheckingAppUpdate] = useState(false);
+  const [adminRefreshing, setAdminRefreshing] = useState(false);
+  const [adminLastRefreshAt, setAdminLastRefreshAt] = useState("");
   const [isOnline, setIsOnline] = useState(canUseBrowser ? window.navigator.onLine : true);
   const [toastMessage, setToastMessage] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -1414,6 +1512,49 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!canUseBrowser || screen === "admin") {
+      return;
+    }
+
+    const meta = SEO_SCREEN_META[screen] || SEO_SCREEN_META.home;
+    const canonicalPath = screen === "kennel" ? "/pension-canine/" : "/";
+    const canonicalUrl = `${publicSiteUrl || window.location.origin}${canonicalPath}`;
+    const imageUrl = `${publicSiteUrl || window.location.origin}/images/pension-canine-3.jpg`;
+
+    document.title = meta.title;
+
+    const upsertMeta = (selector, attribute, value) => {
+      let element = document.head.querySelector(selector);
+
+      if (!element) {
+        element = document.createElement("meta");
+        const [name, content] = selector.includes("property=")
+          ? ["property", selector.match(/property="([^"]+)"/)?.[1]]
+          : ["name", selector.match(/name="([^"]+)"/)?.[1]];
+        element.setAttribute(name, content || "");
+        document.head.appendChild(element);
+      }
+
+      element.setAttribute(attribute, value);
+    };
+
+    upsertMeta('meta[name="description"]', "content", meta.description);
+    upsertMeta('meta[property="og:title"]', "content", meta.title);
+    upsertMeta('meta[property="og:description"]', "content", meta.description);
+    upsertMeta('meta[property="og:type"]', "content", "website");
+    upsertMeta('meta[property="og:url"]', "content", canonicalUrl);
+    upsertMeta('meta[property="og:image"]', "content", imageUrl);
+
+    let canonical = document.head.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", canonicalUrl);
+  }, [screen]);
 
   useEffect(() => {
     if (screen === "admin" || !PUBLIC_SCREEN_LABELS[screen]) {
@@ -2191,19 +2332,25 @@ if (missingProfileContact) {
       await loadKennelBookings();
       await loadKennelBlockedDates();
       await loadContactMessages();
+      await loadContactMessageReplies();
       await loadAdminReminders();
       await loadAdminActionLogs();
       await loadAutomationRuns();
+      await loadBillingDocuments();
       await loadAnnouncementHistory();
       await loadAppSettings();
       await loadOccasionalSaleReservations();
       await loadTrafficEvents();
       await loadEggProductionLogs();
+      setAdminLastRefreshAt(new Date().toISOString());
       setScreen("admin");
     } else {
       setIsAdmin(false);
       await loadMyOrders(user.id);
       await loadMyOccasionalSaleReservations(user.email);
+      await loadContactMessages();
+      await loadContactMessageReplies();
+      await loadBillingDocuments();
       setScreen("shop");
       await loadStock();
     }
@@ -2330,13 +2477,16 @@ const profile = profiles[0];
     await loadKennelBookings();
     await loadKennelBlockedDates();
     await loadContactMessages();
+    await loadContactMessageReplies();
     await loadAdminReminders();
     await loadAdminActionLogs();
     await loadAutomationRuns();
+    await loadBillingDocuments();
     await loadAnnouncementHistory();
     await loadOccasionalSaleReservations();
     await loadTrafficEvents();
     await loadEggProductionLogs();
+    setAdminLastRefreshAt(new Date().toISOString());
     setScreen("admin");
   }
 
@@ -2540,7 +2690,7 @@ async function placeOrder() {
     return;
   }
 
-  await loadStock();
+  await Promise.all([loadStock(), loadBillingDocuments()]);
   await logAdminAction({
     actionType: "order_status",
     title: `Commande passée en ${status}`,
@@ -2573,6 +2723,7 @@ const loadOrders = useCallback(async () => {
 
   const formattedOrders = (ordersData || []).map((o) => ({
     id: o.id,
+    user_id: o.user_id || null,
     client: o.client_name || "Client",
     email: o.client_email || "",
     box6: o.box6 || 0,
@@ -2763,6 +2914,21 @@ async function loadContactMessages() {
   setContactMessages(data || []);
 }
 
+async function loadContactMessageReplies() {
+  const { data, error } = await supabase
+    .from("contact_message_replies")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("Réponses aux messages indisponibles.", error.message);
+    setContactMessageReplies([]);
+    return;
+  }
+
+  setContactMessageReplies(data || []);
+}
+
 async function loadAdminReminders() {
   const { data, error } = await supabase
     .from("admin_reminders")
@@ -2810,23 +2976,123 @@ async function loadAutomationRuns() {
   setAutomationRuns(data || []);
 }
 
+async function loadBillingDocuments() {
+  const { data, error } = await supabase
+    .from("billing_documents")
+    .select("*")
+    .order("issued_at", { ascending: false })
+    .limit(isAdmin ? 500 : 100);
+
+  if (error) {
+    console.warn("Factures indisponibles.", error.message);
+    return;
+  }
+
+  setBillingDocuments(data || []);
+}
+
 async function runAdminAutomation(automationKey) {
   if (automationRunningKey) return;
+
+  const confirmationDetails = {
+    daily_payments: {
+      title: "Relancer l'email des impayés ?",
+      message: "Un nouvel email récapitulatif sera immédiatement envoyé à l'adresse administrateur.",
+    },
+    egg_reminders: {
+      title: "Relancer les rappels d'œufs ?",
+      message: "Les clients actuellement concernés pourront recevoir leur rappel par email ou notification.",
+    },
+    google_reviews: {
+      title: "Relancer les demandes d'avis ?",
+      message: "Les clients éligibles qui n'ont pas encore été sollicités pourront recevoir un email ou une notification.",
+    },
+  };
+  const confirmation = confirmationDetails[automationKey] || {
+    title: "Relancer cet automatisme ?",
+    message: "Cette action peut envoyer immédiatement des emails ou des notifications.",
+  };
+  const confirmed = await requestConfirm({
+    ...confirmation,
+    confirmLabel: "Relancer et envoyer",
+    cancelLabel: "Ne rien envoyer",
+    tone: "warning",
+  });
+
+  if (!confirmed) return;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  if (!accessToken) {
+    showToast("Votre session admin a expiré. Reconnectez-vous avant de relancer l'automatisme.");
+    return;
+  }
 
   setAutomationRunningKey(automationKey);
   const { error } = await supabase.functions.invoke("run-admin-automation", {
     body: { automationKey },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   setAutomationRunningKey("");
 
   if (error) {
-    showToast("Impossible de relancer cet automatisme : " + error.message);
+    let errorMessage = error.message || "Erreur inconnue.";
+
+    try {
+      const responseBody = await error.context?.json();
+      errorMessage = responseBody?.error || responseBody?.message || errorMessage;
+    } catch {
+      // La réponse Supabase ne contient pas toujours un corps JSON exploitable.
+    }
+
+    showToast("Impossible de relancer cet automatisme : " + errorMessage);
     await loadAutomationRuns();
     return;
   }
 
   await Promise.all([loadAutomationRuns(), loadAdminActionLogs()]);
   showToast("Automatisme relancé avec succès.");
+}
+
+async function refreshAdminData() {
+  if (adminRefreshing) return;
+
+  setAdminRefreshing(true);
+  await Promise.allSettled([
+    loadOrders(),
+    loadCustomerProfiles(),
+    loadClientPushSubscriptions(),
+    loadAdminPushSubscriptions(),
+    loadStock(),
+    loadDeliverySlots(),
+    loadProducts(),
+    loadEducationActivities(),
+    loadEducationDateSlots(),
+    loadEducationBookings(),
+    loadKennelServices(),
+    loadKennelBookings(),
+    loadKennelBlockedDates(),
+    loadContactMessages(),
+    loadContactMessageReplies(),
+    loadAdminReminders(),
+    loadAdminActionLogs(),
+    loadAutomationRuns(),
+    loadBillingDocuments(),
+    loadAnnouncementHistory(),
+    loadAboutContent(),
+    loadHomeFeaturedEvent(),
+    loadHomeNews(),
+    loadOccasionalSalesContent(),
+    loadOccasionalSaleReservations(),
+    loadKennelContent(),
+    loadAppSettings(),
+    loadTrafficEvents(),
+    loadEggProductionLogs(),
+  ]);
+  setAdminLastRefreshAt(new Date().toISOString());
+  setAdminRefreshing(false);
+  showToast("Toutes les données admin sont à jour.");
 }
 
 async function logAdminAction({ actionType, title, targetType = "", targetId = null, targetLabel = "", details = {} }) {
@@ -3078,6 +3344,7 @@ async function submitContactMessage(e) {
 
   setContactForm(emptyContactForm);
   const contactConfirmationSent = await handleContactMessageConfirmation(contactMessageId);
+  await Promise.all([loadContactMessages(), loadContactMessageReplies()]);
   showToast(
     contactConfirmationSent
       ? "Message envoyé. Un email de confirmation vient de vous être envoyé."
@@ -3114,6 +3381,146 @@ async function updateContactMessageStatus(id, status) {
   });
   await loadContactMessages();
   showToast(isHandled ? "Message traité et archivé." : "Message remis dans les messages actifs.");
+}
+
+function getContactMessageReplies(messageId) {
+  return contactMessageReplies.filter((reply) => reply.contact_message_id === messageId);
+}
+
+function getClientMessagesSeenStorageKey(userId = currentUser?.id) {
+  return userId ? `client-messages-seen-at-${userId}` : "client-messages-seen-at";
+}
+
+function markClientMessagesSeen() {
+  const seenAt = new Date().toISOString();
+  if (currentUser?.id) {
+    setClientMessagesSeenAtByUser((seenByUser) => ({
+      ...seenByUser,
+      [currentUser.id]: seenAt,
+    }));
+  }
+
+  if (canUseBrowser) {
+    localStorage.setItem(getClientMessagesSeenStorageKey(), seenAt);
+  }
+}
+
+function updateContactReplyDraft(messageId, value) {
+  setContactReplyDrafts((drafts) => ({
+    ...drafts,
+    [messageId]: value,
+  }));
+}
+
+async function submitContactReply(message, senderRole = isAdmin ? "admin" : "client") {
+  const cleanReply = String(contactReplyDrafts[message.id] || "").trim();
+
+  if (!cleanReply) {
+    showToast("Écrivez une réponse avant d'envoyer.");
+    return;
+  }
+
+  if (!currentUser?.id) {
+    showToast("Vous devez être connecté pour répondre.");
+    setScreen("login");
+    return;
+  }
+
+  const { error } = await supabase.from("contact_message_replies").insert({
+    contact_message_id: message.id,
+    sender_user_id: currentUser.id,
+    sender_role: senderRole,
+    sender_name: senderRole === "admin" ? name || "Les Poulettes du Marais" : message.full_name || name || "Client",
+    sender_email: currentUser.email || message.email || "",
+    message: cleanReply,
+  });
+
+  if (error) {
+    showToast("Impossible d'envoyer la réponse : " + error.message);
+    return;
+  }
+
+  setContactReplyDrafts((drafts) => ({ ...drafts, [message.id]: "" }));
+  await Promise.all([loadContactMessages(), loadContactMessageReplies()]);
+
+  if (senderRole === "admin") {
+    await logAdminAction({
+      actionType: "contact_reply",
+      title: "Réponse envoyée au client",
+      targetType: "Message",
+      targetId: message.id,
+      targetLabel: message.full_name || message.email || "Message client",
+      details: { sujet: message.subject || "" },
+    });
+  }
+
+  showToast(senderRole === "admin" ? "Réponse ajoutée à la conversation." : "Votre réponse a bien été envoyée.");
+}
+
+async function startConversationFromClientProfile(profile) {
+  const cleanSubject = String(clientConversationForm.subject || "").trim() || "Message de la ferme";
+  const cleanMessage = String(clientConversationForm.message || "").trim();
+
+  if (!profile?.id) {
+    showToast("Sélectionnez d'abord un client.");
+    return;
+  }
+
+  if (!cleanMessage) {
+    showToast("Écrivez un message avant de démarrer la conversation.");
+    return;
+  }
+
+  if (!String(profile.email || "").trim()) {
+    showToast("Ce client n'a pas d'email renseigné. Ajoutez un email avant de démarrer une conversation.");
+    return;
+  }
+
+  const contactMessageId = crypto.randomUUID();
+  const { error: messageError } = await supabase.from("contact_messages").insert({
+    id: contactMessageId,
+    user_id: profile.id,
+    full_name: profile.full_name || profile.email || "Client",
+    email: profile.email,
+    phone: profile.phone || "",
+    subject: cleanSubject,
+    message: "Conversation démarrée par la ferme.",
+    status: "En cours",
+  });
+
+  if (messageError) {
+    showToast("Impossible de créer la conversation : " + messageError.message);
+    return;
+  }
+
+  const { error: replyError } = await supabase.from("contact_message_replies").insert({
+    contact_message_id: contactMessageId,
+    sender_user_id: currentUser?.id || null,
+    sender_role: "admin",
+    sender_name: name || "Les Poulettes du Marais",
+    sender_email: currentUser?.email || "",
+    message: cleanMessage,
+  });
+
+  if (replyError) {
+    showToast("Conversation créée, mais impossible d'ajouter le message : " + replyError.message);
+    await Promise.all([loadContactMessages(), loadContactMessageReplies()]);
+    return;
+  }
+
+  setClientConversationForm({ subject: "", message: "" });
+  await Promise.all([loadContactMessages(), loadContactMessageReplies()]);
+  await logAdminAction({
+    actionType: "contact_conversation_started",
+    title: "Conversation démarrée depuis la fiche client",
+    targetType: "Client",
+    targetId: profile.id,
+    targetLabel: profile.full_name || profile.email || "Client",
+    details: { sujet: cleanSubject },
+  });
+  setContactMessageArchiveView("active");
+  setAdminView("contacts");
+  showToast("Conversation créée. Elle apparaît dans l'onglet Messages et dans l'espace client.");
 }
 
 async function loadAnnouncementHistory() {
@@ -3259,6 +3666,30 @@ function updateCustomerInternalNotesDraft(profileId, value) {
   );
 }
 
+function updateCustomerContactDraft(profileId, changes) {
+  setCustomerProfiles((previous) =>
+    previous.map((profile) =>
+      profile.id === profileId ? { ...profile, ...changes } : profile
+    )
+  );
+}
+
+async function saveCustomerContactInfo(profile) {
+  const { error } = await supabase.rpc("update_customer_contact_info", {
+    p_profile_id: profile.id,
+    p_phone: profile.phone || "",
+    p_delivery_address: profile.delivery_address || "",
+  });
+
+  if (error) {
+    showToast("Impossible d'enregistrer les coordonnées : " + error.message);
+    return;
+  }
+
+  await loadCustomerProfiles();
+  showToast("Coordonnées client mises à jour.");
+}
+
 async function saveCustomerInternalNotes(profile) {
   const { error } = await supabase.rpc("update_customer_internal_notes", {
     p_profile_id: profile.id,
@@ -3282,6 +3713,22 @@ async function copyMessageTemplate(template) {
     showToast("Modèle copié.");
   } catch {
     showToast("Impossible de copier automatiquement. Sélectionnez le texte du modèle.");
+  }
+}
+
+async function copyClientField(value, label) {
+  const cleanValue = String(value || "").trim();
+
+  if (!cleanValue) {
+    showToast(`${label} non renseigné.`);
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(cleanValue);
+    showToast(`${label} copié.`);
+  } catch {
+    showToast(`Impossible de copier ${label.toLowerCase()} automatiquement.`);
   }
 }
 
@@ -4246,7 +4693,7 @@ async function updateEducationBooking(id, changes) {
     targetLabel: booking?.client_name || booking?.activity_type || "Réservation ferme",
     details: changes,
   });
-  await loadEducationBookings();
+  await Promise.all([loadEducationBookings(), loadBillingDocuments()]);
 }
 
 async function setOrderArchived(order, archived) {
@@ -4424,7 +4871,7 @@ async function updateKennelBooking(id, changes) {
     targetLabel: booking?.dog?.name || booking?.client_name || "Séjour pension",
     details: changes,
   });
-  await loadKennelBookings();
+  await Promise.all([loadKennelBookings(), loadBillingDocuments()]);
 }
 
 async function updateDogProfile(id, changes) {
@@ -4686,6 +5133,9 @@ async function createAdminKennelBooking(event) {
       loadCustomerProfiles(),
       loadEducationBookings(),
       loadKennelBookings(),
+      loadContactMessages(),
+      loadContactMessageReplies(),
+      loadBillingDocuments(),
     ]);
   }
 
@@ -4708,6 +5158,9 @@ async function createAdminKennelBooking(event) {
       loadCustomerProfiles(),
       loadEducationBookings(),
       loadKennelBookings(),
+      loadContactMessages(),
+      loadContactMessageReplies(),
+      loadBillingDocuments(),
     ]);
   }
 
@@ -6360,14 +6813,23 @@ function getClientPushSummary(profileId) {
 
 const selectedClientProfile = customerProfiles.find((profile) => profile.id === selectedClientProfileId) || null;
   const selectedClientEmail = String(selectedClientProfile?.email || "").trim().toLowerCase();
-const selectedClientOrders = selectedClientEmail
-  ? orders.filter((order) => String(order.email || "").trim().toLowerCase() === selectedClientEmail)
+const selectedClientOrders = selectedClientProfile
+  ? orders.filter((order) =>
+      order.user_id === selectedClientProfile?.id ||
+      String(order.email || "").trim().toLowerCase() === selectedClientEmail
+    )
   : [];
-const selectedClientEducationBookings = selectedClientEmail
-  ? educationBookings.filter((booking) => String(booking.client_email || "").trim().toLowerCase() === selectedClientEmail)
+const selectedClientEducationBookings = selectedClientProfile
+  ? educationBookings.filter((booking) =>
+      booking.user_id === selectedClientProfile?.id ||
+      String(booking.client_email || "").trim().toLowerCase() === selectedClientEmail
+    )
   : [];
-const selectedClientKennelBookings = selectedClientEmail
-  ? kennelBookings.filter((booking) => String(booking.client_email || "").trim().toLowerCase() === selectedClientEmail)
+const selectedClientKennelBookings = selectedClientProfile
+  ? kennelBookings.filter((booking) =>
+      booking.user_id === selectedClientProfile?.id ||
+      String(booking.client_email || "").trim().toLowerCase() === selectedClientEmail
+    )
   : [];
 const selectedClientReminders = selectedClientProfile
   ? adminReminders.filter((reminder) => reminder.profile_id === selectedClientProfile.id)
@@ -6391,6 +6853,27 @@ const selectedClientMessages = selectedClientProfile
         (selectedClientEmail && messageEmail === selectedClientEmail) ||
         (selectedClientPhone && messagePhone === selectedClientPhone) ||
         (profileName && messageName === profileName)
+      );
+    })
+  : [];
+const selectedClientBillingDocuments = selectedClientProfile
+  ? billingDocuments.filter((document) => {
+      const documentUserId = String(document.user_id || "");
+      const snapshotEmail = String(document.customer_snapshot?.email || "").trim().toLowerCase();
+      const snapshotPhone = getSmsPhoneNumber(document.customer_snapshot?.phone);
+      const sourceType = String(document.source_type || "");
+      const sourceId = String(document.source_id || "");
+      const linkedSourceIds = new Set([
+        ...selectedClientOrders.map((order) => `order:${String(order.id)}`),
+        ...selectedClientEducationBookings.map((booking) => `education:${String(booking.id)}`),
+        ...selectedClientKennelBookings.map((booking) => `kennel:${String(booking.id)}`),
+      ]);
+
+      return (
+        (documentUserId && documentUserId === selectedClientProfile.id) ||
+        (sourceType && sourceId && linkedSourceIds.has(`${sourceType}:${sourceId}`)) ||
+        (selectedClientEmail && snapshotEmail === selectedClientEmail) ||
+        (selectedClientPhone && snapshotPhone === selectedClientPhone)
       );
     })
   : [];
@@ -6459,6 +6942,14 @@ const selectedClientTimeline = selectedClientProfile
         title: message.subject || "Message client",
         detail: [message.status || "Nouveau", message.message].filter(Boolean).join(" - "),
         tone: "message",
+      })),
+      ...selectedClientBillingDocuments.map((document) => ({
+        id: `timeline-billing-${document.id}`,
+        type: document.document_type === "credit_note" ? "Avoir" : "Facture",
+        date: document.issued_at,
+        title: document.document_number,
+        detail: `${Number(document.total || 0).toFixed(2)} EUR - ${document.payment_status || "A payer"}`,
+        tone: "billing",
       })),
     ]
       .filter(Boolean)
@@ -6545,8 +7036,10 @@ const adminDogSearchResults = Object.values(
       booking.dog?.food_notes,
       booking.dog?.behavior_notes,
       booking.dog?.medical_notes,
+      booking.dog?.veterinarian_name,
       booking.dog?.emergency_contact_name,
       booking.dog?.emergency_contact_phone,
+      booking.dog?.microchip_number,
       booking.client_name,
       booking.client_email,
       booking.phone
@@ -7001,6 +7494,29 @@ const activeContactMessages = contactMessages.filter((message) => !message.archi
 const archivedContactMessages = contactMessages.filter((message) => Boolean(message.archived_at));
 const visibleContactMessages =
   contactMessageArchiveView === "archived" ? archivedContactMessages : activeContactMessages;
+const clientContactMessages = currentUser?.id
+  ? contactMessages.filter((message) => message.user_id === currentUser.id)
+  : [];
+const clientContactMessageIds = new Set(clientContactMessages.map((message) => message.id));
+const clientMessagesSeenAt = currentUser?.id
+  ? clientMessagesSeenAtByUser[currentUser.id] ||
+    (canUseBrowser ? localStorage.getItem(getClientMessagesSeenStorageKey(currentUser.id)) || "" : "")
+  : "";
+const clientAdminReplies = currentUser?.id
+  ? contactMessageReplies.filter(
+      (reply) => reply.sender_role === "admin" && clientContactMessageIds.has(reply.contact_message_id)
+    )
+  : [];
+const clientUnreadAdminReplies = clientAdminReplies.filter(
+  (reply) => !clientMessagesSeenAt || String(reply.created_at || "") > clientMessagesSeenAt
+);
+const clientUnreadAdminReplyCount = clientUnreadAdminReplies.length;
+const latestClientUnreadReply = [...clientUnreadAdminReplies].sort(
+  (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+)[0];
+const unhandledContactMessagesCount = activeContactMessages.filter(
+  (message) => !["Traité", "Traitee", "Traitée"].includes(message.status || "Nouveau")
+).length;
 const urgentContactMessages = activeContactMessages
   .filter((message) => !["Traité", "Traitee", "Traité"].includes(message.status || "Nouveau"))
   .slice(0, 6);
@@ -9715,6 +10231,10 @@ function openTutorialFromPage(guideId) {
                     </button>
                   </div>
 
+                  <a className="landing__seo-link" href="/pension-canine/">
+                    En savoir plus sur la pension canine à Bourneuf-en-Retz
+                  </a>
+
                   <div className="landing__socials" aria-label="Réseaux sociaux">
                     <span>Suivez la ferme</span>
                     <a
@@ -11223,6 +11743,92 @@ function openTutorialFromPage(guideId) {
                   Elles ne sont pas revendues et peuvent être consultées, corrigées ou supprimées sur simple demande.
                 </p>
               </form>
+
+              {isLogged && clientContactMessages.length > 0 && (
+                <section className="client-account-card contact-client-history">
+                  <div className="client-account-title">
+                    <span><MessageSquareText size={22} /></span>
+                    <div>
+                      <h2>Mes échanges avec la ferme</h2>
+                      <p>Vos messages et les réponses reçues depuis l'application.</p>
+                    </div>
+                  </div>
+
+                  {clientUnreadAdminReplyCount > 0 && (
+                    <aside className="client-message-alert client-message-alert--compact" role="status">
+                      <div>
+                        <span>
+                          <BellRing size={22} />
+                        </span>
+                        <div>
+                          <strong>
+                            {clientUnreadAdminReplyCount} nouvelle réponse{clientUnreadAdminReplyCount > 1 ? "s" : ""} de la ferme
+                          </strong>
+                          <p>Elle est affichée dans vos échanges ci-dessous.</p>
+                        </div>
+                      </div>
+                      <button type="button" onClick={markClientMessagesSeen}>
+                        Marquer comme lu
+                      </button>
+                    </aside>
+                  )}
+
+                  <div className="contact-thread-list">
+                    {clientContactMessages.map((message) => {
+                      const replies = getContactMessageReplies(message.id);
+                      const unreadRepliesForMessage = clientUnreadAdminReplies.filter(
+                        (reply) => reply.contact_message_id === message.id
+                      ).length;
+
+                      return (
+                        <article key={`client-contact-${message.id}`} className="contact-thread-card">
+                          <div className="contact-thread-card__header">
+                            <div>
+                              <strong>{message.subject || "Message"}</strong>
+                              <span>{formatCreatedAtDateTime(message.created_at)} - {message.status || "Nouveau"}</span>
+                            </div>
+                            {unreadRepliesForMessage > 0 && (
+                              <span className="client-message-thread-badge">
+                                {unreadRepliesForMessage} nouveau{unreadRepliesForMessage > 1 ? "x" : ""}
+                              </span>
+                            )}
+                          </div>
+                          <div className="contact-thread">
+                            <article className="contact-thread__bubble contact-thread__bubble--client">
+                              <span>Vous - {formatCreatedAtDateTime(message.created_at)}</span>
+                              <p>{message.message}</p>
+                            </article>
+                            {replies.map((reply) => (
+                              <article
+                                key={reply.id}
+                                className={`contact-thread__bubble ${reply.sender_role === "admin" ? "contact-thread__bubble--admin" : "contact-thread__bubble--client"}`}
+                              >
+                                <span>
+                                  {reply.sender_role === "admin" ? "Les Poulettes du Marais" : "Vous"} - {formatCreatedAtDateTime(reply.created_at)}
+                                </span>
+                                <p>{reply.message}</p>
+                              </article>
+                            ))}
+                          </div>
+                          <div className="contact-reply-box">
+                            <textarea
+                              value={contactReplyDrafts[message.id] || ""}
+                              onChange={(e) => updateContactReplyDraft(message.id, e.target.value)}
+                              placeholder="Ajouter une réponse..."
+                              rows="3"
+                            />
+                            <div>
+                              <button type="button" className="primary-action" onClick={() => submitContactReply(message, "client")}>
+                                Envoyer la réponse
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </div>
           </section>
         )}
@@ -11683,6 +12289,28 @@ function openTutorialFromPage(guideId) {
               </button>
             </aside>
 
+            {clientUnreadAdminReplyCount > 0 && (
+              <aside className="client-message-alert" role="status">
+                <div>
+                  <span>
+                    <MessageSquareText size={24} />
+                  </span>
+                  <div>
+                    <strong>
+                      {clientUnreadAdminReplyCount} nouveau message{clientUnreadAdminReplyCount > 1 ? "s" : ""} de la ferme
+                    </strong>
+                    <p>
+                      Dernière réponse reçue le {formatCreatedAtDateTime(latestClientUnreadReply?.created_at)}.
+                      Ouvrez la messagerie pour la consulter.
+                    </p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setScreen("contact")}>
+                  Voir mes messages
+                </button>
+              </aside>
+            )}
+
             <aside className="inline-help-card">
               <span>
                 <HelpCircle size={20} />
@@ -11750,6 +12378,21 @@ function openTutorialFromPage(guideId) {
                 </span>
                 <strong>Mes infos</strong>
                 <em>{clientNotificationLabel}</em>
+                <ChevronRight size={20} />
+              </button>
+              <button type="button" onClick={() => setScreen("contact")}>
+                {clientUnreadAdminReplyCount > 0 && (
+                  <span className="client-message-badge">{clientUnreadAdminReplyCount}</span>
+                )}
+                <span>
+                  <MessageSquareText size={24} />
+                </span>
+                <strong>Messages</strong>
+                <em>
+                  {clientUnreadAdminReplyCount > 0
+                    ? `${clientUnreadAdminReplyCount} nouveau${clientUnreadAdminReplyCount > 1 ? "x" : ""}`
+                    : `${clientContactMessages.length} échange${clientContactMessages.length > 1 ? "s" : ""}`}
+                </em>
                 <ChevronRight size={20} />
               </button>
             </div>
@@ -11820,18 +12463,24 @@ function openTutorialFromPage(guideId) {
                 <div className="client-account-list">
                   {myOrders.slice(0, 6).map((o) => {
                     const cancelInfo = getClientOrderCancelInfo(o);
+                    const orderStep = getOrderStatusStep(o.status);
+                    const isCancelledOrder = normalizeOrderStatus(o.status) === "Annulée";
 
                     return (
                       <article key={o.id}>
                         <strong>Commande du {formatDeliveryDate(o.delivery_date)}</strong>
                         <span>{getOrderSummary(o)}</span>
                         <em>{getOrderEggs(o)} œufs - {o.status}</em>
-                        <div className="client-order-progress" data-step={getOrderStatusStep(o.status)}>
-                          {["Envoyée", "Préparation", "Prête", "Livrée"].map((step, index) => (
-                            <span key={step} className={getOrderStatusStep(o.status) >= index ? "is-active" : ""}>
-                              {step}
-                            </span>
-                          ))}
+                        <div className={`client-order-progress ${isCancelledOrder ? "is-cancelled" : ""}`} data-step={orderStep}>
+                          {isCancelledOrder ? (
+                            <span className="is-cancelled">Annulée</span>
+                          ) : (
+                            ["Envoyée", "Préparation", "Prête", "Livrée"].map((step, index) => (
+                              <span key={step} className={orderStep >= index ? "is-active" : ""}>
+                                {step}
+                              </span>
+                            ))
+                          )}
                         </div>
                         {cancelInfo.canCancel ? (
                           <div className="client-order-actions">
@@ -11944,6 +12593,56 @@ function openTutorialFromPage(guideId) {
                   ))}
                   {clientAccountDogs.length === 0 && <p>Aucune fiche chien pour le moment.</p>}
                 </div>
+              </section>
+
+              <section className="client-account-card client-account-card--billing">
+                <div className="client-account-title">
+                  <span><Printer size={22} /></span>
+                  <div>
+                    <h2>Mes factures</h2>
+                    <p>Factures disponibles dès la commande, puis après confirmation pour les réservations.</p>
+                  </div>
+                </div>
+                <BillingDocumentsList documents={billingDocuments} onOpen={setSelectedBillingDocument} compact />
+              </section>
+
+              <section className="client-account-card">
+                <div className="client-account-title">
+                  <span><MessageSquareText size={22} /></span>
+                  <div>
+                    <h2>
+                      Mes messages
+                      {clientUnreadAdminReplyCount > 0 && (
+                        <span className="client-message-title-badge">{clientUnreadAdminReplyCount}</span>
+                      )}
+                    </h2>
+                    <p>Échanges conservés avec la ferme.</p>
+                  </div>
+                </div>
+                <div className="client-account-list">
+                  {clientContactMessages.slice(0, 4).map((message) => {
+                    const replies = getContactMessageReplies(message.id);
+                    const unreadRepliesForMessage = clientUnreadAdminReplies.filter(
+                      (reply) => reply.contact_message_id === message.id
+                    ).length;
+
+                    return (
+                    <article key={`account-message-${message.id}`} className={unreadRepliesForMessage > 0 ? "has-new-message" : ""}>
+                      <strong>{message.subject || "Message"}</strong>
+                      <span>{formatCreatedAtDateTime(message.created_at)}</span>
+                      <em>
+                        {unreadRepliesForMessage > 0
+                          ? `${unreadRepliesForMessage} nouveau${unreadRepliesForMessage > 1 ? "x" : ""} message${unreadRepliesForMessage > 1 ? "s" : ""}`
+                          : `${replies.length} réponse${replies.length > 1 ? "s" : ""}`}
+                      </em>
+                    </article>
+                    );
+                  })}
+                  {clientContactMessages.length === 0 && <p>Aucun échange pour le moment.</p>}
+                </div>
+                <button type="button" onClick={() => setScreen("contact")} className="client-account-edit-button">
+                  Ouvrir la messagerie
+                </button>
               </section>
             </div>
           </section>
@@ -12160,6 +12859,14 @@ function openTutorialFromPage(guideId) {
                 <p className="shop-eyebrow">Tableau de bord</p>
                 <h1>Espace admin</h1>
                 <p>Suivez le stock, préparez les commandes et mettez les statuts à jour.</p>
+                <div className="admin-sync-status">
+                  <RefreshCw size={15} className={adminRefreshing ? "is-spinning" : ""} />
+                  {adminRefreshing
+                    ? "Actualisation des données..."
+                    : adminLastRefreshAt
+                    ? `Données actualisées le ${formatCreatedAtDateTime(adminLastRefreshAt)}`
+                    : "Données chargées à la connexion"}
+                </div>
               </div>
               <div className="admin-hero__actions">
                 <button
@@ -12207,38 +12914,11 @@ function openTutorialFromPage(guideId) {
                 </button>
                 <button
                   type="button"
-                  onClick={async () => {
-                    await loadOrders();
-                    await loadCustomerProfiles();
-                    await loadClientPushSubscriptions();
-                    await loadAdminPushSubscriptions();
-                    await loadStock();
-                    await loadDeliverySlots();
-                    await loadProducts();
-                    await loadEducationActivities();
-                    await loadEducationDateSlots();
-                    await loadEducationBookings();
-                    await loadKennelServices();
-                    await loadKennelBookings();
-                    await loadKennelBlockedDates();
-                    await loadContactMessages();
-                    await loadAdminReminders();
-                    await loadAdminActionLogs();
-                    await loadAutomationRuns();
-                    await loadAnnouncementHistory();
-                    await loadAboutContent();
-                    await loadHomeFeaturedEvent();
-                    await loadHomeNews();
-                    await loadOccasionalSalesContent();
-                    await loadOccasionalSaleReservations();
-                    await loadKennelContent();
-                    await loadAppSettings();
-                    await loadTrafficEvents();
-                    await loadEggProductionLogs();
-                  }}
+                  onClick={refreshAdminData}
                   className="secondary-action"
+                  disabled={adminRefreshing}
                 >
-                  Actualiser
+                  {adminRefreshing ? "Actualisation..." : "Actualiser"}
                 </button>
                 <button
                   type="button"
@@ -12335,10 +13015,23 @@ function openTutorialFromPage(guideId) {
               <button type="button" onClick={() => applyAdminShortcut("toPrepare")}>
                 <PackageCheck size={16} />
                 À préparer
+                {adminStats.toPrepare > 0 && (
+                  <span>{adminStats.toPrepare}</span>
+                )}
               </button>
               <button type="button" onClick={() => setAdminView("kennel")}>
                 <Dog size={16} />
                 Pension
+                {pendingKennelRequestsCount > 0 && (
+                  <span>{pendingKennelRequestsCount}</span>
+                )}
+              </button>
+              <button type="button" onClick={() => setAdminView("education")}>
+                <School size={16} />
+                Ferme
+                {pendingEducationRequestsCount > 0 && (
+                  <span>{pendingEducationRequestsCount}</span>
+                )}
               </button>
               <button type="button" onClick={() => setAdminView("payments")}>
                 <Euro size={16} />
@@ -12350,10 +13043,16 @@ function openTutorialFromPage(guideId) {
               <button type="button" onClick={() => setAdminView("clients")}>
                 <UsersRound size={16} />
                 Clients
+                {recentClientsCount > 0 && (
+                  <span>{recentClientsCount}</span>
+                )}
               </button>
               <button type="button" onClick={() => setAdminView("contacts")}>
                 <Mail size={16} />
                 Messages
+                {unhandledContactMessagesCount > 0 && (
+                  <span>{unhandledContactMessagesCount}</span>
+                )}
               </button>
             </nav>
 
@@ -12408,6 +13107,7 @@ function openTutorialFromPage(guideId) {
                   title: "Suivi",
                   tabs: [
                     { value: "payments", label: "Paiements" },
+                    { value: "invoices", label: "Factures" },
                     { value: "accounting", label: "Comptabilité" },
                     { value: "cancellations", label: "Annulations" },
                     { value: "statistics", label: "Statistiques" },
@@ -12437,6 +13137,31 @@ function openTutorialFromPage(guideId) {
                         {tab.value === "notifications" && unreadAdminNotifications.length > 0 && (
                           <span className="admin-tab-badge admin-tab-badge--danger">
                             {unreadAdminNotifications.length}
+                          </span>
+                        )}
+                        {tab.value === "eggs" && adminStats.toPrepare > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {adminStats.toPrepare}
+                          </span>
+                        )}
+                        {tab.value === "education" && pendingEducationRequestsCount > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {pendingEducationRequestsCount}
+                          </span>
+                        )}
+                        {tab.value === "kennel" && pendingKennelRequestsCount > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {pendingKennelRequestsCount}
+                          </span>
+                        )}
+                        {tab.value === "clients" && recentClientsCount > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--info">
+                            {recentClientsCount}
+                          </span>
+                        )}
+                        {tab.value === "contacts" && unhandledContactMessagesCount > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {unhandledContactMessagesCount}
                           </span>
                         )}
                         {tab.value === "payments" && kennelPaymentFollowups.length > 0 && (
@@ -12505,7 +13230,7 @@ function openTutorialFromPage(guideId) {
               <article>
                 <span><Mail size={24} /></span>
                 <p>Messages</p>
-                <strong>{activeContactMessages.filter((message) => message.status !== "Traité").length}</strong>
+                <strong>{unhandledContactMessagesCount}</strong>
               </article>
             </div>
 
@@ -12928,7 +13653,7 @@ function openTutorialFromPage(guideId) {
                   <span><Mail size={24} /></span>
                   <div>
                     <h2>Messages</h2>
-                    <p>{activeContactMessages.filter((message) => message.status !== "Traité").length} message{activeContactMessages.filter((message) => message.status !== "Traité").length > 1 ? "s" : ""} à traiter</p>
+                    <p>{unhandledContactMessagesCount} message{unhandledContactMessagesCount > 1 ? "s" : ""} à traiter</p>
                   </div>
                 </div>
                 <div className="admin-dashboard-card__metric">
@@ -13905,14 +14630,14 @@ function openTutorialFromPage(guideId) {
                           className="client-detail-contact-button client-detail-contact-button--whatsapp"
                           onClick={() => openClientDirectMessage(selectedClientProfile, "whatsapp")}
                         >
-                          WhatsApp
+                          <MessageSquareText size={17} /> WhatsApp
                         </button>
                         <button
                           type="button"
                           className="client-detail-contact-button"
                           onClick={() => openClientDirectMessage(selectedClientProfile, "email")}
                         >
-                          Email
+                          <Mail size={17} /> Gmail
                         </button>
                         <button
                           type="button"
@@ -13928,12 +14653,57 @@ function openTutorialFromPage(guideId) {
 
                     <div className="client-detail-grid">
                       <article>
+                        <span>Email</span>
+                        <div className="client-detail-copy-value">
+                          <strong>{selectedClientProfile.email || "Non renseigné"}</strong>
+                          <button
+                            type="button"
+                            title="Copier l'email"
+                            aria-label="Copier l'email du client"
+                            onClick={() => copyClientField(selectedClientProfile.email, "Email")}
+                          >
+                            <Copy size={16} />
+                          </button>
+                        </div>
+                      </article>
+                      <article>
                         <span>Téléphone</span>
-                        <strong>{selectedClientProfile.phone || "Non renseigné"}</strong>
+                        <div className="client-detail-copy-value">
+                          <input
+                            className="client-detail-edit-input"
+                            value={selectedClientProfile.phone || ""}
+                            onChange={(e) => updateCustomerContactDraft(selectedClientProfile.id, { phone: e.target.value })}
+                            placeholder="Téléphone"
+                          />
+                          <button
+                            type="button"
+                            title="Copier le téléphone"
+                            aria-label="Copier le téléphone du client"
+                            onClick={() => copyClientField(selectedClientProfile.phone, "Téléphone")}
+                          >
+                            <Copy size={16} />
+                          </button>
+                        </div>
                       </article>
                       <article>
                         <span>Adresse</span>
-                        <strong>{selectedClientProfile.delivery_address || "Non renseignée"}</strong>
+                        <div className="client-detail-copy-value">
+                          <textarea
+                            className="client-detail-edit-input"
+                            value={selectedClientProfile.delivery_address || ""}
+                            onChange={(e) => updateCustomerContactDraft(selectedClientProfile.id, { delivery_address: e.target.value })}
+                            placeholder="Adresse de livraison"
+                            rows="2"
+                          />
+                          <button
+                            type="button"
+                            title="Copier l'adresse"
+                            aria-label="Copier l'adresse du client"
+                            onClick={() => copyClientField(selectedClientProfile.delivery_address, "Adresse")}
+                          >
+                            <Copy size={16} />
+                          </button>
+                        </div>
                       </article>
                       <article>
                         <span>Inscription</span>
@@ -13966,7 +14736,82 @@ function openTutorialFromPage(guideId) {
                         <strong>{selectedClientStats.kennel}</strong>
                         <em>séjour{selectedClientStats.kennel > 1 ? "s" : ""}</em>
                       </article>
+                      <article>
+                        <span>Factures</span>
+                        <strong>{selectedClientBillingDocuments.length}</strong>
+                        <em>{selectedClientBillingDocuments.reduce((sum, document) => sum + Number(document.total || 0), 0).toFixed(2)} EUR</em>
+                      </article>
                     </div>
+
+                    <div className="client-contact-admin-actions">
+                      <p>Modifiez le téléphone ou l'adresse si le client s'est trompé, puis enregistrez.</p>
+                      <button type="button" onClick={() => saveCustomerContactInfo(selectedClientProfile)}>
+                        Enregistrer les coordonnées
+                      </button>
+                    </div>
+
+                    <section className="client-detail-documents" aria-label="Factures du client">
+                      <div className="client-detail-section-title">
+                        <div>
+                          <span>Documents</span>
+                          <h4>Factures du client</h4>
+                        </div>
+                        <strong>{selectedClientBillingDocuments.length}</strong>
+                      </div>
+                      <BillingDocumentsList documents={selectedClientBillingDocuments} onOpen={setSelectedBillingDocument} compact />
+                    </section>
+
+                    <section className="client-detail-conversations" aria-label="Conversations client">
+                      <div className="client-detail-section-title">
+                        <div>
+                          <span>Messages</span>
+                          <h4>Conversations</h4>
+                        </div>
+                        <strong>{selectedClientMessages.length}</strong>
+                      </div>
+                      <div className="client-start-conversation">
+                        <label>
+                          <span>Sujet</span>
+                          <input
+                            value={clientConversationForm.subject}
+                            onChange={(e) => setClientConversationForm({ ...clientConversationForm, subject: e.target.value })}
+                            placeholder="Ex : Informations pour votre réservation"
+                          />
+                        </label>
+                        <label>
+                          <span>Message</span>
+                          <textarea
+                            value={clientConversationForm.message}
+                            onChange={(e) => setClientConversationForm({ ...clientConversationForm, message: e.target.value })}
+                            placeholder="Écrivez votre message au client..."
+                            rows="3"
+                          />
+                        </label>
+                        <button type="button" onClick={() => startConversationFromClientProfile(selectedClientProfile)}>
+                          <MessageSquareText size={17} /> Démarrer une conversation
+                        </button>
+                      </div>
+                      <div className="contact-thread-list is-compact">
+                        {selectedClientMessages.slice(0, 4).map((message) => (
+                          <article key={`client-thread-${message.id}`} className="contact-thread-card">
+                            <div className="contact-thread-card__header">
+                              <div>
+                                <strong>{message.subject || "Message client"}</strong>
+                                <span>{formatCreatedAtDateTime(message.created_at)} - {message.status || "Nouveau"}</span>
+                              </div>
+                              <button type="button" onClick={() => setAdminView("contacts")}>
+                                Ouvrir
+                              </button>
+                            </div>
+                            <p>{message.message}</p>
+                            <em>{getContactMessageReplies(message.id).length} réponse{getContactMessageReplies(message.id).length > 1 ? "s" : ""}</em>
+                          </article>
+                        ))}
+                        {selectedClientMessages.length === 0 && (
+                          <p className="client-timeline__empty">Aucun message pour ce client.</p>
+                        )}
+                      </div>
+                    </section>
 
                     <div className="client-internal-notes">
                       <label>
@@ -14047,6 +14892,17 @@ function openTutorialFromPage(guideId) {
                             <strong>{formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
                             <span>{booking.dog?.name || "Chien"} - {booking.status || "Demandée"}</span>
                             <em>{getKennelBookingAmount(booking).toFixed(2)} EUR</em>
+                            {kennelContracts.some((contract) => contract.booking_id === booking.id) ? (
+                              <button type="button" className="contract-access-button is-signed" onClick={() => setSelectedContractBooking(booking)}>
+                                <CheckCircle2 size={17} /> Voir le contrat signé
+                              </button>
+                            ) : String(booking.status || "").toLowerCase().startsWith("confirm") ? (
+                              <button type="button" className="contract-access-button" onClick={() => setSelectedContractBooking(booking)}>
+                                Aperçu du contrat
+                              </button>
+                            ) : (
+                              <span className="contract-waiting-label">Contrat disponible après confirmation</span>
+                            )}
                           </article>
                         ))}
                         {selectedClientKennelBookings.length === 0 && <p>Aucune réservation pension.</p>}
@@ -14190,42 +15046,77 @@ function openTutorialFromPage(guideId) {
                 </div>
 
                 <div className="admin-reservation-list">
-                  {visibleContactMessages.map((message) => (
-                    <article key={message.id} className="admin-reservation-card contact-message-card">
-                      <div>
-                        <strong>{message.full_name || "Client"}</strong>
-                        <span>{message.email || "Email non renseigné"}{message.phone ? ` - ${message.phone}` : ""}</span>
-                        <span>{message.subject || "Demande depuis le site"}</span>
-                        <em>{message.message}</em>
-                        <span>Reçu le {formatDeliveryDate(String(message.created_at || "").slice(0, 10))}</span>
-                        {message.archived_at && (
-                          <span>Archivé le {formatDeliveryDate(String(message.archived_at || "").slice(0, 10))}</span>
-                        )}
-                      </div>
-                      <div className="admin-reservation-controls">
-                        <select
-                          value={message.status || "Nouveau"}
-                          onChange={(e) => updateContactMessageStatus(message.id, e.target.value)}
-                        >
-                          <option>Nouveau</option>
-                          <option>En cours</option>
-                          <option>Traité</option>
-                        </select>
-                        <button type="button" className="admin-tool-link" onClick={() => openContactReplyInGmail(message)}>
-                          Répondre
-                        </button>
-                        {message.archived_at && (
-                          <button
-                            type="button"
-                            className="admin-tool-button"
-                            onClick={() => updateContactMessageStatus(message.id, "Nouveau")}
+                  {visibleContactMessages.map((message) => {
+                    const replies = getContactMessageReplies(message.id);
+
+                    return (
+                      <article key={message.id} className="admin-reservation-card contact-message-card contact-thread-card">
+                        <div className="contact-thread-card__header">
+                          <div>
+                            <strong>{message.full_name || "Client"}</strong>
+                            <span>{message.email || "Email non renseigné"}{message.phone ? ` - ${message.phone}` : ""}</span>
+                            <span>{message.subject || "Demande depuis le site"}</span>
+                            <span>Reçu le {formatCreatedAtDateTime(message.created_at)}</span>
+                            {message.archived_at && (
+                              <span>Archivé le {formatCreatedAtDateTime(message.archived_at)}</span>
+                            )}
+                          </div>
+                          <select
+                            value={message.status || "Nouveau"}
+                            onChange={(e) => updateContactMessageStatus(message.id, e.target.value)}
                           >
-                            Restaurer
-                          </button>
-                        )}
-                      </div>
-                    </article>
-                  ))}
+                            <option>Nouveau</option>
+                            <option>En cours</option>
+                            <option>Traité</option>
+                          </select>
+                        </div>
+
+                        <div className="contact-thread">
+                          <article className="contact-thread__bubble contact-thread__bubble--client">
+                            <span>{message.full_name || "Client"} - {formatCreatedAtDateTime(message.created_at)}</span>
+                            <p>{message.message}</p>
+                          </article>
+                          {replies.map((reply) => (
+                            <article
+                              key={reply.id}
+                              className={`contact-thread__bubble ${reply.sender_role === "admin" ? "contact-thread__bubble--admin" : "contact-thread__bubble--client"}`}
+                            >
+                              <span>
+                                {reply.sender_role === "admin" ? "Vous" : reply.sender_name || "Client"} - {formatCreatedAtDateTime(reply.created_at)}
+                              </span>
+                              <p>{reply.message}</p>
+                            </article>
+                          ))}
+                        </div>
+
+                        <div className="contact-reply-box">
+                          <textarea
+                            value={contactReplyDrafts[message.id] || ""}
+                            onChange={(e) => updateContactReplyDraft(message.id, e.target.value)}
+                            placeholder="Écrire une réponse visible par le client dans son espace..."
+                            rows="3"
+                          />
+                          <div>
+                            <button type="button" className="admin-tool-link" onClick={() => submitContactReply(message, "admin")}>
+                              Répondre dans l'appli
+                            </button>
+                            <button type="button" className="admin-tool-button" onClick={() => openContactReplyInGmail(message)}>
+                              Ouvrir Gmail
+                            </button>
+                            {message.archived_at && (
+                              <button
+                                type="button"
+                                className="admin-tool-button"
+                                onClick={() => updateContactMessageStatus(message.id, "Nouveau")}
+                              >
+                                Restaurer
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
 
                   {visibleContactMessages.length === 0 && (
                     <p className="delivery-empty">
@@ -16156,12 +17047,67 @@ function openTutorialFromPage(guideId) {
 
                         <div className="kennel-dog-profile-grid">
                           <label>
+                            <span>Nom du chien</span>
+                            <input
+                              defaultValue={dog?.name || ""}
+                              disabled={!dog?.id}
+                              onBlur={(e) => updateDogProfile(dog.id, { name: e.target.value.trim() || dog?.name || "Chien" })}
+                              placeholder="Nom du chien"
+                            />
+                          </label>
+                          <label>
+                            <span>Race</span>
+                            <input
+                              defaultValue={dog?.breed || ""}
+                              disabled={!dog?.id}
+                              onBlur={(e) => updateDogProfile(dog.id, { breed: e.target.value.trim() })}
+                              placeholder="Race ou croisement"
+                            />
+                          </label>
+                          <label>
+                            <span>Année de naissance</span>
+                            <input
+                              type="number"
+                              min="1990"
+                              max="2035"
+                              defaultValue={dog?.birth_year || ""}
+                              disabled={!dog?.id}
+                              onBlur={(e) =>
+                                updateDogProfile(dog.id, {
+                                  birth_year: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
+                              placeholder="Ex : 2020"
+                            />
+                          </label>
+                          <label>
+                            <span>Sexe</span>
+                            <select
+                              defaultValue={dog?.sex || ""}
+                              disabled={!dog?.id}
+                              onChange={(e) => updateDogProfile(dog.id, { sex: e.target.value })}
+                            >
+                              <option value="">À renseigner</option>
+                              <option value="Femelle">Femelle</option>
+                              <option value="Mâle">Mâle</option>
+                            </select>
+                          </label>
+                          <label>
                             <span>Photo du chien</span>
                             <input
                               defaultValue={dog?.photo_url || ""}
                               disabled={!dog?.id}
                               onBlur={(e) => updateDogProfile(dog.id, { photo_url: normalizeImageUrl(e.target.value) })}
                               placeholder="/images/photo-chien.jpg ou lien"
+                            />
+                          </label>
+                          <label>
+                            <span>Vétérinaire habituel</span>
+                            <input
+                              defaultValue={dog?.veterinarian_name || ""}
+                              disabled={!dog?.id}
+                              onBlur={(e) => updateDogProfile(dog.id, { veterinarian_name: e.target.value.trim() })}
+                              placeholder="Nom du vétérinaire ou clinique"
                             />
                           </label>
                           <label>
@@ -16637,6 +17583,21 @@ function openTutorialFromPage(guideId) {
                   ))}
                   {kennelPaymentHistory.length === 0 && <p>Aucune relance paiement enregistrée pour le moment.</p>}
                 </div>
+              </section>
+
+              <section className="admin-products-panel billing-admin-panel" data-section="invoices">
+                <div className="admin-panel-title admin-panel-title--row">
+                  <span><Printer size={24} /></span>
+                  <div>
+                    <h2>Factures et avoirs</h2>
+                    <p>{billingDocuments.length} document{billingDocuments.length > 1 ? "s" : ""} numéroté{billingDocuments.length > 1 ? "s" : ""} disponible{billingDocuments.length > 1 ? "s" : ""}.</p>
+                  </div>
+                  <button type="button" onClick={loadBillingDocuments}><RefreshCw size={17} /> Actualiser</button>
+                </div>
+                <aside className="billing-admin-notice">
+                  Les factures sont créées immédiatement pour les commandes de la boutique et lors du passage à « Confirmée » pour les réservations. Une annulation ultérieure génère un avoir lié.
+                </aside>
+                <BillingDocumentsList documents={billingDocuments} onOpen={setSelectedBillingDocument} />
               </section>
 
               <section className="admin-orders-panel accounting-panel" data-section="accounting">
@@ -17506,6 +18467,15 @@ function openTutorialFromPage(guideId) {
             isAdmin={isAdmin}
             onClose={() => setSelectedContractBooking(null)}
             onSign={(signedContract) => signKennelContract(selectedContractBooking, signedContract)}
+          />
+        </Suspense>
+      )}
+      {selectedBillingDocument && (
+        <Suspense fallback={<div className="lazy-panel-loading" role="status">Chargement de la facture...</div>}>
+          <BillingDocumentModal
+            document={selectedBillingDocument}
+            referenceDocument={billingDocuments.find((item) => item.id === selectedBillingDocument.reference_document_id)}
+            onClose={() => setSelectedBillingDocument(null)}
           />
         </Suspense>
       )}

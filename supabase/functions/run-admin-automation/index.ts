@@ -31,7 +31,7 @@ serve(async (req) => {
     const authorization = req.headers.get("Authorization") || "";
 
     if (!supabaseUrl || !serviceRoleKey || !authorization.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Acces refuse." }), {
+      return new Response(JSON.stringify({ error: "Autorisation de la session admin absente." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -40,14 +40,14 @@ serve(async (req) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const token = authorization.slice(7);
     const { data: userData, error: userError } = await adminClient.auth.getUser(token);
-    if (userError || !userData.user) throw new Error("Session administrateur invalide.");
+    if (userError || !userData.user) throw new Error("Session administrateur invalide ou expiree.");
 
     const { data: profile, error: profileError } = await adminClient
       .from("profiles")
       .select("is_admin")
       .eq("id", userData.user.id)
       .single();
-    if (profileError || profile?.is_admin !== true) throw new Error("Acces reserve a l'administrateur.");
+    if (profileError || profile?.is_admin !== true) throw new Error("Ce compte n'est pas reconnu comme administrateur.");
 
     const body = await req.json();
     const automationKey = String(body.automationKey || "") as keyof typeof automations;
@@ -64,12 +64,29 @@ serve(async (req) => {
 
     const response = await fetch(`${supabaseUrl}/functions/v1/${automation.functionName}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-cron-secret": cronSecret },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        "x-cron-secret": cronSecret,
+      },
       body: JSON.stringify({ triggerSource: "manual" }),
     });
     const responseBody = await response.json().catch(() => ({}));
 
-    if (!response.ok) throw new Error(responseBody.error || "Relance impossible.");
+    if (!response.ok) {
+      return new Response(
+        JSON.stringify({
+          error: `Automatisme cible refuse : ${responseBody.error || responseBody.message || "Relance impossible."}`,
+          target_status: response.status,
+          automation_key: automationKey,
+        }),
+        {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     return new Response(JSON.stringify({ success: true, result: responseBody }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

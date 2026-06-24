@@ -92,6 +92,7 @@ serve(async (req) => {
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
     const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
     const requestSecret = req.headers.get("x-cron-secret") || "";
+    const isServiceRoleRequest = req.headers.get("Authorization") === `Bearer ${serviceRoleKey}`;
 
     if (!supabaseUrl || !serviceRoleKey || !cronSecret || !resendApiKey) {
       return new Response(JSON.stringify({ error: "Configuration des rappels incomplete." }), {
@@ -100,7 +101,7 @@ serve(async (req) => {
       });
     }
 
-    if (requestSecret !== cronSecret) {
+    if (!isServiceRoleRequest && requestSecret !== cronSecret) {
       return new Response(JSON.stringify({ error: "Acces refuse." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

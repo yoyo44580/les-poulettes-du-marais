@@ -59,6 +59,7 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     const cronSecret = Deno.env.get("GOOGLE_REVIEW_REQUEST_SECRET");
     const requestSecret = req.headers.get("x-cron-secret") || "";
+    const isServiceRoleRequest = req.headers.get("Authorization") === `Bearer ${serviceRoleKey}`;
 
     if (!supabaseUrl || !serviceRoleKey || !resendApiKey || !cronSecret) {
       return new Response(JSON.stringify({ error: "Configuration des demandes d'avis incomplete." }), {
@@ -67,7 +68,7 @@ serve(async (req) => {
       });
     }
 
-    if (requestSecret !== cronSecret) {
+    if (!isServiceRoleRequest && requestSecret !== cronSecret) {
       return new Response(JSON.stringify({ error: "Acces refuse." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

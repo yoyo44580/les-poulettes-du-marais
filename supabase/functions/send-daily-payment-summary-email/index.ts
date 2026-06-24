@@ -186,6 +186,7 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     const cronSecret = Deno.env.get("DAILY_PAYMENT_EMAIL_SECRET");
     const requestSecret = req.headers.get("x-cron-secret") || "";
+    const isServiceRoleRequest = req.headers.get("Authorization") === `Bearer ${serviceRoleKey}`;
 
     if (!supabaseUrl || !serviceRoleKey || !resendApiKey || !cronSecret) {
       return new Response(JSON.stringify({ error: "Configuration email incomplete." }), {
@@ -194,7 +195,7 @@ serve(async (req) => {
       });
     }
 
-    if (requestSecret !== cronSecret) {
+    if (!isServiceRoleRequest && requestSecret !== cronSecret) {
       return new Response(JSON.stringify({ error: "Acces refuse." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
