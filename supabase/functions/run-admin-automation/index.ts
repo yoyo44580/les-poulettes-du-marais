@@ -20,6 +20,14 @@ const automations = {
     functionName: "send-google-review-requests",
     secretName: "GOOGLE_REVIEW_REQUEST_SECRET",
   },
+  kennel_contracts: {
+    functionName: "send-kennel-contract-reminders",
+    secretName: "DAILY_PAYMENT_EMAIL_SECRET",
+  },
+  client_messages: {
+    functionName: "send-client-message-reminders",
+    secretName: "CLIENT_MESSAGE_REMINDER_SECRET",
+  },
 } as const;
 
 serve(async (req) => {
@@ -70,7 +78,10 @@ serve(async (req) => {
         apikey: serviceRoleKey,
         "x-cron-secret": cronSecret,
       },
-      body: JSON.stringify({ triggerSource: "manual" }),
+      body: JSON.stringify({
+        triggerSource: "manual",
+        bookingId: body.bookingId || null,
+      }),
     });
     const responseBody = await response.json().catch(() => ({}));
 

@@ -58,8 +58,19 @@ verify_jwt = false
 import_map = "./functions/send-google-review-requests/deno.json"
 entrypoint = "./functions/send-google-review-requests/index.ts"
 
-[functions.run-admin-automation]
+[functions.send-kennel-contract-reminders]
 enabled = true
 verify_jwt = false
-import_map = "./functions/run-admin-automation/deno.json"
-entrypoint = "./functions/run-admin-automation/index.ts"
+import_map = "./functions/send-kennel-contract-reminders/deno.json"
+entrypoint = "./functions/send-kennel-contract-reminders/index.ts"
+
+[functions.run-admin-automation]
+  enabled = true
+  verify_jwt = false
+  import_map = "./functions/run-admin-automation/deno.json"
+  entrypoint = "./functions/run-admin-automation/index.ts"
+
+[functions.send-client-message-reminders]
+  enabled = true
+  verify_jwt = false
+  entrypoint = "./functions/send-client-message-reminders/index.ts"

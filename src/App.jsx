@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, BellRing, Smartphone, Image as ImageIcon } from "lucide-react";
+import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, BellRing, Smartphone, Video, Image as ImageIcon } from "lucide-react";
 import "./App.css";
 
 const KennelContractModal = lazy(() => import("./KennelContractModal"));
@@ -27,6 +27,7 @@ const appBuildVersion = import.meta.env.VITE_APP_VERSION || "0.0.0";
 const appBuildTime = import.meta.env.VITE_APP_BUILD_TIME || "";
 const appCommitRef = import.meta.env.VITE_APP_COMMIT || "";
 const appShortCommit = appCommitRef ? appCommitRef.slice(0, 7) : "local";
+const appReleaseKey = appCommitRef || appBuildTime || appBuildVersion;
 
 function getInitialPublicScreen() {
   if (!canUseBrowser) {
@@ -319,6 +320,7 @@ const emptyProductForm = {
   unit_label: "piece",
   image: "",
   size_eggs: 0,
+  stock_quantity: "0",
 };
 
 const emptyDeliverySlotForm = {
@@ -482,6 +484,16 @@ const DEFAULT_HOME_NEWS_CONTENT = {
   items: [],
 };
 
+const DEFAULT_HOME_VIDEO = {
+  enabled: false,
+  eyebrow: "En images",
+  title: "La vie aux Poulettes du Marais",
+  text: "Decouvrez un evenement, la pension canine ou un moment de vie a la ferme.",
+  video_url: "",
+  poster_url: "/images/pension-canine-1.jpg",
+  autoplay: false,
+};
+
 const DEFAULT_OCCASIONAL_SALES_CONTENT = {
   enabled: false,
   eyebrow: "Vente ponctuelle",
@@ -596,6 +608,16 @@ const DEFAULT_ABOUT_CONTENT = {
 const DEFAULT_KENNEL_CONTENT = {
   image_url: "/images/pension-canine-1.jpg",
   gallery_images: "",
+  video_url: "/videos/pension-canine-bandeau.mp4",
+  video_enabled: true,
+};
+
+const DEFAULT_AUTOMATION_SETTINGS = {
+  daily_payments: true,
+  egg_reminders: true,
+  google_reviews: true,
+  kennel_contracts: true,
+  client_messages: true,
 };
 
 const DEFAULT_HOME_FEATURED_EVENT = {
@@ -798,6 +820,25 @@ function appendImageToGallery(value, imageUrl) {
 
 function getImageOptionLabel(imageUrl) {
   return String(imageUrl || "").split("/").pop()?.replace(/\.(jpe?g|png|webp|gif|avif)$/i, "") || "Photo";
+}
+
+function getSafeMediaFileName(file) {
+  const originalName = String(file?.name || "photo").trim();
+  const extension = originalName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const baseName = originalName
+    .replace(/\.[^.]+$/u, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "photo";
+  const uniquePart =
+    canUseBrowser && window.crypto?.randomUUID
+      ? window.crypto.randomUUID().slice(0, 8)
+      : String(Date.now()).slice(-8);
+
+  return `${baseName}-${uniquePart}.${extension}`;
 }
 
 function PhotoQuickPicker({ onPick, label = "Choisir une photo existante", imageOptions = AVAILABLE_IMAGE_OPTIONS }) {
@@ -1027,6 +1068,7 @@ export default function EggSalesPWA() {
   const [myOrders, setMyOrders] = useState([]);
   const [myOccasionalSaleReservations, setMyOccasionalSaleReservations] = useState([]);
   const [customerProfiles, setCustomerProfiles] = useState([]);
+  const [clientAppVersions, setClientAppVersions] = useState([]);
   const [addressValidationRunning, setAddressValidationRunning] = useState(false);
   const [addressValidationProgress, setAddressValidationProgress] = useState({ current: 0, total: 0 });
   const [clientPushSubscriptions, setClientPushSubscriptions] = useState([]);
@@ -1041,6 +1083,12 @@ export default function EggSalesPWA() {
     notes: "",
   });
   const [eggProductionCalendarMonth, setEggProductionCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
+  const [eggProductionChartMode, setEggProductionChartMode] = useState("day");
+  const [eggRevenueForecast, setEggRevenueForecast] = useState({
+    year: new Date().getFullYear(),
+    price_per_egg: "",
+    months: {},
+  });
   const [adminFilter, setAdminFilter] = useState("En cours");
   const [adminOrderShortcut, setAdminOrderShortcut] = useState("all");
   const [adminArchiveView, setAdminArchiveView] = useState("active");
@@ -1059,6 +1107,13 @@ export default function EggSalesPWA() {
   );
   const [educationReservationFilter, setEducationReservationFilter] = useState("pending");
   const [kennelReservationFilter, setKennelReservationFilter] = useState("pending");
+  const [focusedKennelBookingId, setFocusedKennelBookingId] = useState("");
+  const [reservationDateEditor, setReservationDateEditor] = useState({
+    key: "",
+    booking_date: "",
+    start_date: "",
+    end_date: "",
+  });
   const [accountingStartDate, setAccountingStartDate] = useState("");
   const [accountingEndDate, setAccountingEndDate] = useState("");
   const [accountingActivity, setAccountingActivity] = useState("all");
@@ -1069,9 +1124,13 @@ export default function EggSalesPWA() {
   const [customPhotoLibraryForm, setCustomPhotoLibraryForm] = useState(DEFAULT_CUSTOM_PHOTO_LIBRARY);
   const [customPhotoInput, setCustomPhotoInput] = useState("");
   const [mediaSearch, setMediaSearch] = useState("");
+  const [mediaUploadStatus, setMediaUploadStatus] = useState({ uploading: false, message: "" });
   const [homeNewsContent, setHomeNewsContent] = useState(DEFAULT_HOME_NEWS_CONTENT);
   const [homeNewsForm, setHomeNewsForm] = useState(emptyHomeNewsForm);
   const [activeHomeNewsIndex, setActiveHomeNewsIndex] = useState(0);
+  const [homeVideo, setHomeVideo] = useState(DEFAULT_HOME_VIDEO);
+  const [homeVideoForm, setHomeVideoForm] = useState(DEFAULT_HOME_VIDEO);
+  const [homeVideoUploadStatus, setHomeVideoUploadStatus] = useState({ uploading: false, message: "" });
   const [occasionalSalesContent, setOccasionalSalesContent] = useState(DEFAULT_OCCASIONAL_SALES_CONTENT);
   const [occasionalSalesForm, setOccasionalSalesForm] = useState(DEFAULT_OCCASIONAL_SALES_CONTENT);
   const [occasionalSaleReservations, setOccasionalSaleReservations] = useState([]);
@@ -1080,6 +1139,7 @@ export default function EggSalesPWA() {
   const [homeFeaturedEventForm, setHomeFeaturedEventForm] = useState(DEFAULT_HOME_FEATURED_EVENT);
   const [kennelContent, setKennelContent] = useState(DEFAULT_KENNEL_CONTENT);
   const [kennelContentForm, setKennelContentForm] = useState(DEFAULT_KENNEL_CONTENT);
+  const [kennelVideoUploadStatus, setKennelVideoUploadStatus] = useState({ uploading: false, message: "" });
   const [appSettings, setAppSettings] = useState(DEFAULT_APP_SETTINGS);
   const [appSettingsForm, setAppSettingsForm] = useState(DEFAULT_APP_SETTINGS);
   const [eggSummaryReady, setEggSummaryReady] = useState(!isEggSummaryPage);
@@ -1092,9 +1152,12 @@ export default function EggSalesPWA() {
   const [selectedEducationDetailId, setSelectedEducationDetailId] = useState(DEFAULT_EDUCATION_ACTIVITIES[0].id);
   const [educationDateSlots, setEducationDateSlots] = useState([]);
   const [educationDateForm, setEducationDateForm] = useState(emptyEducationDateForm);
+  const [selectedEducationSlotId, setSelectedEducationSlotId] = useState("");
   const [educationBookings, setEducationBookings] = useState([]);
   const [educationBookingForm, setEducationBookingForm] = useState(emptyEducationBookingForm);
   const [birthdayBookingForm, setBirthdayBookingForm] = useState(emptyBirthdayBookingForm);
+  const [isSubmittingEducationBooking, setIsSubmittingEducationBooking] = useState(false);
+  const [isSubmittingBirthdayBooking, setIsSubmittingBirthdayBooking] = useState(false);
   const [kennelServices, setKennelServices] = useState(DEFAULT_KENNEL_SERVICES);
   const [kennelServiceForm, setKennelServiceForm] = useState(emptyKennelServiceForm);
   const [kennelBookings, setKennelBookings] = useState([]);
@@ -1113,6 +1176,8 @@ export default function EggSalesPWA() {
   const [contactMessages, setContactMessages] = useState([]);
   const [contactMessageReplies, setContactMessageReplies] = useState([]);
   const [contactReplyDrafts, setContactReplyDrafts] = useState({});
+  const [bookingMessageDrafts, setBookingMessageDrafts] = useState({});
+  const [openBookingMessageComposer, setOpenBookingMessageComposer] = useState("");
   const [clientConversationForm, setClientConversationForm] = useState({ subject: "", message: "" });
   const [clientMessagesSeenAtByUser, setClientMessagesSeenAtByUser] = useState({});
   const [contactMessageArchiveView, setContactMessageArchiveView] = useState("active");
@@ -1122,6 +1187,9 @@ export default function EggSalesPWA() {
   const [adminActionLogs, setAdminActionLogs] = useState([]);
   const [automationRuns, setAutomationRuns] = useState([]);
   const [automationRunningKey, setAutomationRunningKey] = useState("");
+  const [contractReminderRunningId, setContractReminderRunningId] = useState("");
+  const [automationSettings, setAutomationSettings] = useState(DEFAULT_AUTOMATION_SETTINGS);
+  const [automationSettingsSavingKey, setAutomationSettingsSavingKey] = useState("");
   const [adminNotificationFilter, setAdminNotificationFilter] = useState("unread");
   const [preparedMessageKinds, setPreparedMessageKinds] = useState({});
   const [announcementForm, setAnnouncementForm] = useState(emptyAnnouncementForm);
@@ -1603,6 +1671,13 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
       .filter((product) => product.quantity > 0);
   }, [cart, products]);
 
+  const hasUnavailableCartItems = selectedCartItems.some(
+    (product) =>
+      product.stock_quantity !== null &&
+      product.stock_quantity !== undefined &&
+      product.quantity > Number(product.stock_quantity || 0)
+  );
+
   const hasSelectedEggProducts = selectedCartItems.some(
     (product) => isEggProduct(product) && product.size_eggs > 0
   );
@@ -1626,10 +1701,17 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
   }, [deliverySlots]);
 
   function updateQty(id, delta) {
-    setCart((prev) => ({
-      ...prev,
-      [id]: Math.max(0, (prev[id] || 0) + delta),
-    }));
+    const product = products.find((item) => item.id === id);
+    const trackedStock = product?.stock_quantity;
+
+    setCart((prev) => {
+      const nextQuantity = Math.max(0, (prev[id] || 0) + delta);
+      const cappedQuantity = trackedStock === null || trackedStock === undefined
+        ? nextQuantity
+        : Math.min(nextQuantity, Number(trackedStock || 0));
+
+      return { ...prev, [id]: cappedQuantity };
+    });
   }
 
   const loadProducts = useCallback(async () => {
@@ -1649,17 +1731,44 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
       return;
     }
 
-    setProducts(
-      data.map((product) => ({
+    const normalizedProducts = data.map((product) => ({
         id: product.id,
         name: product.name,
         price: Number(product.price || 0),
         image: product.image_url || "",
         unit_label: product.unit_label || "piece",
         size_eggs: Number(product.size_eggs || 0),
+        stock_quantity:
+          product.stock_quantity === null || product.stock_quantity === undefined
+            ? isEggProduct(product) ? null : 0
+            : Number(product.stock_quantity),
         active: product.active !== false,
-      }))
-    );
+      }));
+
+    setProducts(normalizedProducts);
+    setCart((currentCart) => {
+      let changed = false;
+      const nextCart = { ...currentCart };
+
+      normalizedProducts.forEach((product) => {
+        if (product.stock_quantity === null || product.stock_quantity === undefined) {
+          return;
+        }
+
+        const currentQuantity = Number(currentCart[product.id] || 0);
+        const cappedQuantity = Math.min(
+          currentQuantity,
+          Math.max(0, Number(product.stock_quantity || 0))
+        );
+
+        if (cappedQuantity !== currentQuantity) {
+          nextCart[product.id] = cappedQuantity;
+          changed = true;
+        }
+      });
+
+      return changed ? nextCart : currentCart;
+    });
   }, []);
 
   const loadFolderImages = useCallback(async () => {
@@ -1725,6 +1834,35 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
 
     return () => window.clearTimeout(timer);
   }, [loadDeliverySlots]);
+
+  const loadEggRevenueForecast = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "egg_revenue_forecast")
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Prevision de chiffre d'affaires oeufs indisponible.", error.message);
+      return;
+    }
+
+    const savedForecast = data?.value || {};
+    const year = new Date().getFullYear();
+    setEggRevenueForecast({
+      year,
+      price_per_egg: savedForecast.year === year ? savedForecast.price_per_egg ?? "" : "",
+      months: savedForecast.year === year && savedForecast.months ? savedForecast.months : {},
+    });
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadEggRevenueForecast();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadEggRevenueForecast]);
 
   const loadAboutContent = useCallback(async () => {
     const { data, error } = await supabase
@@ -1800,6 +1938,8 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
       ...content,
       image_url: normalizeImageUrl(content.image_url),
       gallery_images: parseGalleryImages(content.gallery_images).join("\n"),
+      video_url: normalizeImageUrl(content.video_url),
+      video_enabled: content.video_enabled === true,
     };
 
     setKennelContent(normalizedContent);
@@ -1866,6 +2006,36 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
       : [];
 
     setHomeNewsContent({ items: normalizedItems });
+  }, []);
+
+  const loadHomeVideo = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "home_video")
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Video d'accueil indisponible.", error.message);
+      setHomeVideo(DEFAULT_HOME_VIDEO);
+      setHomeVideoForm(DEFAULT_HOME_VIDEO);
+      return;
+    }
+
+    const content = {
+      ...DEFAULT_HOME_VIDEO,
+      ...(data?.value || {}),
+    };
+    const normalizedContent = {
+      ...content,
+      video_url: normalizeImageUrl(content.video_url),
+      poster_url: normalizeImageUrl(content.poster_url),
+      enabled: content.enabled === true,
+      autoplay: content.autoplay === true,
+    };
+
+    setHomeVideo(normalizedContent);
+    setHomeVideoForm(normalizedContent);
   }, []);
 
   const loadOccasionalSalesContent = useCallback(async () => {
@@ -1947,6 +2117,38 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
     setAppSettingsForm(settings);
   }, []);
 
+  async function reportClientAppVersion(userId) {
+    if (!userId || !canUseBrowser) return false;
+
+    const payload = {
+      p_app_version: appBuildVersion,
+      p_build_commit: appCommitRef || null,
+      p_build_time: appBuildTime || null,
+      p_release_key: appReleaseKey,
+      p_user_agent: navigator.userAgent || "",
+    };
+    const { error } = await supabase.rpc("report_client_app_version", payload);
+
+    if (error) {
+      const { error: fallbackError } = await supabase.from("client_app_versions").upsert({
+        user_id: userId,
+        app_version: appBuildVersion,
+        build_commit: appCommitRef || null,
+        build_time: appBuildTime || null,
+        release_key: appReleaseKey,
+        user_agent: navigator.userAgent || "",
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+
+      if (fallbackError) {
+        console.warn("Version de l'application non enregistrée.", fallbackError.message);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   useEffect(() => {
     if (!canUseBrowser || !("serviceWorker" in navigator)) {
       return;
@@ -1982,13 +2184,24 @@ const activeOccasionalSaleItems = (occasionalSalesContent.items || []).filter((i
       void loadCustomPhotoLibrary();
       void loadHomeFeaturedEvent();
       void loadHomeNews();
+      void loadHomeVideo();
       void loadOccasionalSalesContent();
       void loadKennelContent();
       void loadAppSettings();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [loadAboutContent, loadAppSettings, loadCustomPhotoLibrary, loadHomeFeaturedEvent, loadHomeNews, loadKennelContent, loadOccasionalSalesContent]);
+  }, [loadAboutContent, loadAppSettings, loadCustomPhotoLibrary, loadHomeFeaturedEvent, loadHomeNews, loadHomeVideo, loadKennelContent, loadOccasionalSalesContent]);
+
+  useEffect(() => {
+    if (!isLogged || !currentUser?.id || isAdmin) return undefined;
+
+    const timer = window.setTimeout(() => {
+      void reportClientAppVersion(currentUser.id);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [currentUser?.id, isAdmin, isLogged]);
 
   const loadEducationActivities = useCallback(async () => {
     const { data, error } = await supabase
@@ -2336,6 +2549,7 @@ if (missingProfileContact) {
       await loadAdminReminders();
       await loadAdminActionLogs();
       await loadAutomationRuns();
+      await loadAutomationSettings();
       await loadBillingDocuments();
       await loadAnnouncementHistory();
       await loadAppSettings();
@@ -2346,12 +2560,14 @@ if (missingProfileContact) {
       setScreen("admin");
     } else {
       setIsAdmin(false);
+      await reportClientAppVersion(user.id);
       await loadMyOrders(user.id);
       await loadMyOccasionalSaleReservations(user.email);
       await loadContactMessages();
       await loadContactMessageReplies();
       await loadBillingDocuments();
-      setScreen("shop");
+      await syncClientPushSubscription(user);
+      setScreen("myOrders");
       await loadStock();
     }
 
@@ -2481,6 +2697,7 @@ const profile = profiles[0];
     await loadAdminReminders();
     await loadAdminActionLogs();
     await loadAutomationRuns();
+    await loadAutomationSettings();
     await loadBillingDocuments();
     await loadAnnouncementHistory();
     await loadOccasionalSaleReservations();
@@ -2506,9 +2723,43 @@ async function placeOrder() {
     return;
   }
 
+  if (hasUnavailableCartItems) {
+    showToast("Le stock d'un produit a changé. Votre panier vient d'être actualisé.", "error");
+    await loadProducts();
+    return;
+  }
+
   setIsPlacingOrder(true);
 
   try {
+  const selectedProductIds = selectedCartItems.map((item) => item.id);
+  const { data: freshProducts, error: freshProductsError } = await supabase
+    .from("products")
+    .select("id, name, stock_quantity, active")
+    .in("id", selectedProductIds);
+
+  if (freshProductsError) {
+    showToast("Impossible de vérifier le stock. Réessayez dans quelques instants.", "error");
+    return;
+  }
+
+  const freshProductsById = new Map((freshProducts || []).map((product) => [product.id, product]));
+  const unavailableItem = selectedCartItems.find((item) => {
+    const freshProduct = freshProductsById.get(item.id);
+
+    return !freshProduct ||
+      freshProduct.active === false ||
+      (freshProduct.stock_quantity !== null &&
+        freshProduct.stock_quantity !== undefined &&
+        item.quantity > Number(freshProduct.stock_quantity || 0));
+  });
+
+  if (unavailableItem) {
+    await loadProducts();
+    showToast(`${unavailableItem.name} n'est plus disponible dans cette quantité. Votre panier a été corrigé.`, "error");
+    return;
+  }
+
   const selectedDeliverySlot = availableDeliverySlots.find(
     (slot) => slot.delivery_date === deliveryDate && slot.active !== false
   );
@@ -2607,6 +2858,8 @@ async function placeOrder() {
       showToast("Ce créneau est complet. Choisissez une autre date de livraison.");
     } else if (message.includes("delivery_slot_closed") || message.includes("delivery_slot_unavailable")) {
       showToast("Choisissez une date de livraison disponible.");
+    } else if (message.includes("product_stock_insufficient")) {
+      showToast("Un produit n'est plus disponible dans la quantite demandee. Le stock vient d'etre actualise.");
     } else if (message.includes("stock_insufficient")) {
       showToast("Stock insuffisant.");
     } else if (message.includes("stock_not_found")) {
@@ -2618,6 +2871,7 @@ async function placeOrder() {
     }
 
     await loadStock();
+    await loadProducts();
     await loadDeliverySlots();
     return;
   }
@@ -2632,7 +2886,7 @@ async function placeOrder() {
   }
 
   setStockEggs(insertedOrder?.stock_remaining ?? stockEggs);
-  await loadStock();
+  await Promise.all([loadStock(), loadProducts()]);
   await loadMyOrders(currentUser.id);
   await notifyAdminsAboutOrder({ ...legacyOrder, items: orderItems, id: insertedOrder?.order_id });
 
@@ -2867,6 +3121,22 @@ async function loadCustomerProfiles() {
   }
 
   setCustomerProfiles(data || []);
+  await loadClientAppVersions();
+}
+
+async function loadClientAppVersions() {
+  const { data, error } = await supabase
+    .from("client_app_versions")
+    .select("user_id, app_version, build_commit, build_time, release_key, last_seen_at, user_agent")
+    .order("last_seen_at", { ascending: false });
+
+  if (error) {
+    console.warn("Versions des applications clientes indisponibles.", error.message);
+    setClientAppVersions([]);
+    return;
+  }
+
+  setClientAppVersions(data || []);
 }
 
 async function loadClientPushSubscriptions() {
@@ -2976,6 +3246,49 @@ async function loadAutomationRuns() {
   setAutomationRuns(data || []);
 }
 
+async function loadAutomationSettings() {
+  const { data, error } = await supabase
+    .from("site_settings")
+    .select("value")
+    .eq("key", "automation_settings")
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Réglages des automatismes indisponibles.", error.message);
+    return;
+  }
+
+  setAutomationSettings({
+    ...DEFAULT_AUTOMATION_SETTINGS,
+    ...(data?.value || {}),
+  });
+}
+
+async function toggleAutomationSetting(automationKey) {
+  if (automationSettingsSavingKey) return;
+
+  const previousSettings = automationSettings;
+  const nextSettings = {
+    ...automationSettings,
+    [automationKey]: automationSettings[automationKey] === false,
+  };
+  setAutomationSettings(nextSettings);
+  setAutomationSettingsSavingKey(automationKey);
+
+  const { error } = await supabase
+    .from("site_settings")
+    .upsert({ key: "automation_settings", value: nextSettings }, { onConflict: "key" });
+  setAutomationSettingsSavingKey("");
+
+  if (error) {
+    setAutomationSettings(previousSettings);
+    showToast("Impossible de modifier cet automatisme : " + error.message);
+    return;
+  }
+
+  showToast(nextSettings[automationKey] === false ? "Automatisme mis en pause." : "Automatisme réactivé.");
+}
+
 async function loadBillingDocuments() {
   const { data, error } = await supabase
     .from("billing_documents")
@@ -2994,18 +3307,31 @@ async function loadBillingDocuments() {
 async function runAdminAutomation(automationKey) {
   if (automationRunningKey) return;
 
+  if (automationSettings[automationKey] === false) {
+    showToast("Réactivez cet automatisme avant de le relancer.");
+    return;
+  }
+
   const confirmationDetails = {
     daily_payments: {
-      title: "Relancer l'email des impayés ?",
-      message: "Un nouvel email récapitulatif sera immédiatement envoyé à l'adresse administrateur.",
+      title: "Envoyer la synthèse quotidienne ?",
+      message: "Le récapitulatif des œufs, des urgences et des impayés sera immédiatement envoyé à l'adresse administrateur.",
     },
     egg_reminders: {
       title: "Relancer les rappels d'œufs ?",
-      message: "Les clients actuellement concernés pourront recevoir leur rappel par email ou notification.",
+      message: "Les clients habituels concernés recevront leur rappel, et les clients inscrits depuis au moins 3 jours sans première commande pourront recevoir un email de bienvenue.",
     },
     google_reviews: {
       title: "Relancer les demandes d'avis ?",
       message: "Les clients éligibles qui n'ont pas encore été sollicités pourront recevoir un email ou une notification.",
+    },
+    kennel_contracts: {
+      title: "Relancer les contrats pension ?",
+      message: "Les clients dont le séjour approche et dont le contrat n'est pas signé pourront recevoir un email et une notification.",
+    },
+    client_messages: {
+      title: "Relancer les messages non lus ?",
+      message: "Les clients qui n'ont pas lu votre reponse depuis plus de 24 heures recevront un rappel courtois unique.",
     },
   };
   const confirmation = confirmationDetails[automationKey] || {
@@ -3055,6 +3381,58 @@ async function runAdminAutomation(automationKey) {
   showToast("Automatisme relancé avec succès.");
 }
 
+async function sendManualKennelContractReminder(booking) {
+  if (!booking?.id || contractReminderRunningId) return;
+
+  const alreadySigned = kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id));
+  if (alreadySigned) {
+    showToast("Le contrat est deja signe pour cette reservation.");
+    return;
+  }
+
+  const confirmed = await requestConfirm({
+    title: "Relancer le contrat pension ?",
+    message: `Envoyer un email et une notification a ${booking.client_name || "ce client"} pour signer le contrat de ${booking.dog?.name || "son chien"} ?`,
+    confirmLabel: "Envoyer la relance",
+    cancelLabel: "Annuler",
+    tone: "warning",
+  });
+  if (!confirmed) return;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) {
+    showToast("Votre session admin a expire. Reconnectez-vous avant d'envoyer la relance.");
+    return;
+  }
+
+  setContractReminderRunningId(String(booking.id));
+  const { data, error } = await supabase.functions.invoke("run-admin-automation", {
+    body: { automationKey: "kennel_contracts", bookingId: booking.id },
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  setContractReminderRunningId("");
+
+  if (error) {
+    let errorMessage = error.message || "Erreur inconnue.";
+
+    try {
+      const responseBody = await error.context?.json();
+      errorMessage = responseBody?.error || responseBody?.message || errorMessage;
+    } catch {
+      // La reponse Supabase ne contient pas toujours un corps JSON exploitable.
+    }
+
+    showToast("Impossible d'envoyer la relance contrat : " + errorMessage);
+    await loadAutomationRuns();
+    return;
+  }
+
+  const sent = Number(data?.result?.sent || 0);
+  await Promise.all([loadAutomationRuns(), loadAdminActionLogs()]);
+  showToast(sent > 0 ? "Relance contrat envoyee au client." : "Aucune relance envoyee : contrat deja signe ou reservation non confirmee.");
+}
+
 async function refreshAdminData() {
   if (adminRefreshing) return;
 
@@ -3078,11 +3456,13 @@ async function refreshAdminData() {
     loadAdminReminders(),
     loadAdminActionLogs(),
     loadAutomationRuns(),
+    loadAutomationSettings(),
     loadBillingDocuments(),
     loadAnnouncementHistory(),
     loadAboutContent(),
     loadHomeFeaturedEvent(),
     loadHomeNews(),
+    loadHomeVideo(),
     loadOccasionalSalesContent(),
     loadOccasionalSaleReservations(),
     loadKennelContent(),
@@ -3391,7 +3771,7 @@ function getClientMessagesSeenStorageKey(userId = currentUser?.id) {
   return userId ? `client-messages-seen-at-${userId}` : "client-messages-seen-at";
 }
 
-function markClientMessagesSeen() {
+async function markClientMessagesSeen() {
   const seenAt = new Date().toISOString();
   if (currentUser?.id) {
     setClientMessagesSeenAtByUser((seenByUser) => ({
@@ -3403,6 +3783,25 @@ function markClientMessagesSeen() {
   if (canUseBrowser) {
     localStorage.setItem(getClientMessagesSeenStorageKey(), seenAt);
   }
+
+  const clientMessageIds = currentUser?.id
+    ? contactMessages.filter((message) => message.user_id === currentUser.id).map((message) => message.id)
+    : [];
+  if (clientMessageIds.length > 0) {
+    const { error } = await supabase
+      .from("contact_message_replies")
+      .update({ client_read_at: seenAt })
+      .eq("sender_role", "admin")
+      .is("client_read_at", null)
+      .in("contact_message_id", clientMessageIds);
+    if (error) console.warn("Lecture des messages non synchronisee.", error.message);
+    else await loadContactMessageReplies();
+  }
+}
+
+function openClientMessages() {
+  setScreen("contact");
+  void markClientMessagesSeen();
 }
 
 function updateContactReplyDraft(messageId, value) {
@@ -3521,6 +3920,89 @@ async function startConversationFromClientProfile(profile) {
   setContactMessageArchiveView("active");
   setAdminView("contacts");
   showToast("Conversation créée. Elle apparaît dans l'onglet Messages et dans l'espace client.");
+}
+
+function getBookingConversationKey(scope, bookingId) {
+  return `${scope}-${bookingId}`;
+}
+
+function updateBookingMessageDraft(scope, bookingId, value) {
+  const key = getBookingConversationKey(scope, bookingId);
+  setBookingMessageDrafts((drafts) => ({ ...drafts, [key]: value }));
+}
+
+async function sendBookingMessage(booking, scope) {
+  const key = getBookingConversationKey(scope, booking?.id);
+  const cleanMessage = String(bookingMessageDrafts[key] || "").trim();
+  const subject =
+    scope === "kennel"
+      ? `Pension canine - ${booking?.dog?.name || "sejour"} du ${formatDeliveryDate(booking?.start_date)}`
+      : `Ferme pedagogique - ${booking?.activity_type || "activite"} du ${formatDeliveryDate(booking?.booking_date)}`;
+
+  if (!cleanMessage) {
+    showToast("Ecrivez un message avant de l'envoyer.");
+    return;
+  }
+
+  if (!booking?.user_id || !String(booking.client_email || "").trim()) {
+    showToast("Cette reservation n'est pas reliee a un compte client. Utilisez plutot l'email ou WhatsApp.");
+    return;
+  }
+
+  let conversation = contactMessages.find(
+    (message) =>
+      message.user_id === booking.user_id &&
+      message.subject === subject &&
+      !message.archived_at
+  );
+
+  if (!conversation) {
+    const contactMessageId = crypto.randomUUID();
+    const { error: conversationError } = await supabase.from("contact_messages").insert({
+      id: contactMessageId,
+      user_id: booking.user_id,
+      full_name: booking.client_name || booking.client_email || "Client",
+      email: booking.client_email,
+      phone: booking.phone || "",
+      subject,
+      message: "Conversation demarree par la ferme.",
+      status: "En cours",
+    });
+
+    if (conversationError) {
+      showToast("Impossible de creer la conversation : " + conversationError.message);
+      return;
+    }
+
+    conversation = { id: contactMessageId, subject };
+  }
+
+  const { error } = await supabase.from("contact_message_replies").insert({
+    contact_message_id: conversation.id,
+    sender_user_id: currentUser?.id || null,
+    sender_role: "admin",
+    sender_name: name || "Les Poulettes du Marais",
+    sender_email: currentUser?.email || "",
+    message: cleanMessage,
+  });
+
+  if (error) {
+    showToast("Impossible d'envoyer le message : " + error.message);
+    return;
+  }
+
+  setBookingMessageDrafts((drafts) => ({ ...drafts, [key]: "" }));
+  setOpenBookingMessageComposer("");
+  await Promise.all([loadContactMessages(), loadContactMessageReplies()]);
+  await logAdminAction({
+    actionType: "booking_message_sent",
+    title: "Message envoye depuis une reservation",
+    targetType: scope === "kennel" ? "Pension canine" : "Ferme pedagogique",
+    targetId: booking.id,
+    targetLabel: booking.client_name || booking.client_email || "Client",
+    details: { sujet: subject },
+  });
+  showToast("Message envoye. Le client le voit dans son espace Messages.");
 }
 
 async function loadAnnouncementHistory() {
@@ -4119,6 +4601,88 @@ async function saveCustomPhotoLibrary(e) {
   showToast("Bibliothèque photos enregistrée.");
 }
 
+async function uploadPhotoToMediaLibrary(event) {
+  const file = event.target.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  if (!file.type.startsWith("image/")) {
+    showToast("Choisissez une image au format JPG, PNG, WebP ou GIF.");
+    event.target.value = "";
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    showToast("La photo est trop lourde. Maximum conseille : 10 Mo.");
+    event.target.value = "";
+    return;
+  }
+
+  const safeFileName = getSafeMediaFileName(file);
+  const folder = new Date().toISOString().slice(0, 7);
+  const filePath = `${folder}/${safeFileName}`;
+  setMediaUploadStatus({ uploading: true, message: `Envoi de ${file.name}...` });
+
+  const { error: uploadError } = await supabase.storage
+    .from("app-media")
+    .upload(filePath, file, {
+      cacheControl: "31536000",
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    const message = String(uploadError.message || "").toLowerCase();
+
+    if (message.includes("bucket") || message.includes("not found")) {
+      showToast("Espace photos absent : appliquez la migration Supabase des médias.");
+    } else if (message.includes("row-level") || message.includes("policy")) {
+      showToast("Accès refusé : vérifiez la migration Supabase des médias.");
+    } else {
+      showToast("Impossible d'envoyer la photo : " + uploadError.message);
+    }
+
+    setMediaUploadStatus({ uploading: false, message: "" });
+    event.target.value = "";
+    return;
+  }
+
+  const { data } = supabase.storage.from("app-media").getPublicUrl(filePath);
+  const publicUrl = normalizeImageUrl(data?.publicUrl || "");
+
+  if (!publicUrl) {
+    showToast("Photo envoyée, mais impossible de récupérer son lien.");
+    setMediaUploadStatus({ uploading: false, message: "" });
+    event.target.value = "";
+    return;
+  }
+
+  const payload = {
+    images: appendImageToGallery(customPhotoLibrary.images || customPhotoLibraryForm.images, publicUrl),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: settingsError } = await supabase
+    .from("site_settings")
+    .upsert({ key: "custom_photo_library", value: payload }, { onConflict: "key" });
+
+  if (settingsError) {
+    showToast("Photo envoyée, mais bibliothèque non enregistrée : " + settingsError.message);
+    setMediaUploadStatus({ uploading: false, message: "" });
+    event.target.value = "";
+    return;
+  }
+
+  setCustomPhotoLibrary(payload);
+  setCustomPhotoLibraryForm(payload);
+  setMediaSearch(getImageOptionLabel(publicUrl));
+  setMediaUploadStatus({ uploading: false, message: "Photo ajoutée à la bibliothèque." });
+  showToast("Photo envoyée et ajoutée à la bibliothèque.");
+  event.target.value = "";
+}
+
 function updateOccasionalSaleItem(itemId, changes) {
   setOccasionalSalesForm((current) => ({
     ...current,
@@ -4142,7 +4706,7 @@ async function saveOccasionalSalesContent(e) {
       description: String(item.description || "").trim(),
       price: String(item.price || "").trim(),
       unit_label: String(item.unit_label || "").trim(),
-      available_quantity: String(item.available_quantity || "").trim(),
+      available_quantity: String(item.available_quantity ?? "").trim(),
       image_url: normalizeImageUrl(item.image_url),
       active: item.active !== false,
     })),
@@ -4351,6 +4915,98 @@ async function deleteHomeNewsItem(item) {
   );
 }
 
+async function uploadHomeVideo(event) {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  const allowedVideoTypes = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+  if (!allowedVideoTypes.has(file.type)) {
+    showToast("Choisissez une video MP4, WebM ou MOV.");
+    event.target.value = "";
+    return;
+  }
+
+  if (file.size > 80 * 1024 * 1024) {
+    showToast("La video est trop lourde. Taille maximale : 80 Mo.");
+    event.target.value = "";
+    return;
+  }
+
+  const safeFileName = getSafeMediaFileName(file);
+  const folder = new Date().toISOString().slice(0, 7);
+  const filePath = `videos/${folder}/${safeFileName}`;
+  setHomeVideoUploadStatus({ uploading: true, message: `Envoi de ${file.name}...` });
+
+  const { error: uploadError } = await supabase.storage
+    .from("app-media")
+    .upload(filePath, file, {
+      cacheControl: "31536000",
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    const message = String(uploadError.message || "").toLowerCase();
+    if (message.includes("mime") || message.includes("size") || message.includes("maximum")) {
+      showToast("Appliquez la migration Supabase des videos, puis recommencez l'envoi.");
+    } else {
+      showToast("Impossible d'envoyer la video : " + uploadError.message);
+    }
+    setHomeVideoUploadStatus({ uploading: false, message: "" });
+    event.target.value = "";
+    return;
+  }
+
+  const { data } = supabase.storage.from("app-media").getPublicUrl(filePath);
+  const publicUrl = String(data?.publicUrl || "").trim();
+  if (!publicUrl) {
+    showToast("Video envoyee, mais son lien n'a pas pu etre recupere.");
+    setHomeVideoUploadStatus({ uploading: false, message: "" });
+    event.target.value = "";
+    return;
+  }
+
+  setHomeVideoForm((current) => ({ ...current, video_url: publicUrl }));
+  setHomeVideoUploadStatus({ uploading: false, message: "Video chargee. Enregistrez le bloc pour la publier." });
+  showToast("Video chargee. Vous pouvez maintenant enregistrer le bloc.");
+  event.target.value = "";
+}
+
+async function saveHomeVideo(event) {
+  event.preventDefault();
+
+  const videoUrl = normalizeImageUrl(homeVideoForm.video_url);
+  if (homeVideoForm.enabled && !videoUrl) {
+    showToast("Ajoutez une video avant d'afficher le bloc sur l'accueil.");
+    return;
+  }
+
+  const payload = {
+    ...homeVideoForm,
+    enabled: homeVideoForm.enabled === true,
+    autoplay: homeVideoForm.autoplay === true,
+    eyebrow: String(homeVideoForm.eyebrow || "").trim(),
+    title: String(homeVideoForm.title || "").trim(),
+    text: String(homeVideoForm.text || "").trim(),
+    video_url: videoUrl,
+    poster_url: normalizeImageUrl(homeVideoForm.poster_url),
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase
+    .from("site_settings")
+    .upsert({ key: "home_video", value: payload }, { onConflict: "key" });
+
+  if (error) {
+    showToast("Impossible d'enregistrer la video d'accueil : " + error.message);
+    return;
+  }
+
+  setHomeVideo(payload);
+  setHomeVideoForm(payload);
+  showToast(payload.enabled ? "Video publiee sur l'accueil." : "Video d'accueil masquee.");
+}
+
 async function saveAboutContent(e) {
   e.preventDefault();
 
@@ -4398,13 +5054,79 @@ async function saveHomeFeaturedEvent(e) {
   showToast("Événement à l'honneur enregistré.");
 }
 
+async function uploadKennelVideo(event) {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  const allowedVideoTypes = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+  if (!allowedVideoTypes.has(file.type)) {
+    showToast("Choisissez une vidéo MP4, WebM ou MOV.");
+    event.target.value = "";
+    return;
+  }
+
+  if (file.size > 80 * 1024 * 1024) {
+    showToast("La vidéo est trop lourde. Taille maximale : 80 Mo.");
+    event.target.value = "";
+    return;
+  }
+
+  const safeFileName = getSafeMediaFileName(file);
+  const folder = new Date().toISOString().slice(0, 7);
+  const filePath = `videos/pension/${folder}/${safeFileName}`;
+  setKennelVideoUploadStatus({ uploading: true, message: `Envoi de ${file.name}...` });
+
+  const { error: uploadError } = await supabase.storage
+    .from("app-media")
+    .upload(filePath, file, {
+      cacheControl: "31536000",
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    const message = String(uploadError.message || "").toLowerCase();
+    if (message.includes("mime") || message.includes("size") || message.includes("maximum")) {
+      showToast("Appliquez la migration Supabase des vidéos, puis recommencez l'envoi.");
+    } else {
+      showToast("Impossible d'envoyer la vidéo : " + uploadError.message);
+    }
+    setKennelVideoUploadStatus({ uploading: false, message: "" });
+    event.target.value = "";
+    return;
+  }
+
+  const { data } = supabase.storage.from("app-media").getPublicUrl(filePath);
+  const publicUrl = String(data?.publicUrl || "").trim();
+  if (!publicUrl) {
+    showToast("Vidéo envoyée, mais son lien n'a pas pu être récupéré.");
+    setKennelVideoUploadStatus({ uploading: false, message: "" });
+    event.target.value = "";
+    return;
+  }
+
+  setKennelContentForm((current) => ({ ...current, video_url: publicUrl, video_enabled: true }));
+  setKennelVideoUploadStatus({ uploading: false, message: "Vidéo chargée. Enregistrez pour la publier." });
+  showToast("Vidéo chargée. Vous pouvez maintenant enregistrer la page pension.");
+  event.target.value = "";
+}
+
 async function saveKennelContent(e) {
   e.preventDefault();
+
+  const videoUrl = normalizeImageUrl(kennelContentForm.video_url);
+  if (kennelContentForm.video_enabled && !videoUrl) {
+    showToast("Choisissez une vidéo avant de l'afficher sur la page pension.");
+    return;
+  }
 
   const payload = {
     ...kennelContentForm,
     image_url: normalizeImageUrl(kennelContentForm.image_url),
     gallery_images: parseGalleryImages(kennelContentForm.gallery_images).join("\n"),
+    video_url: videoUrl,
+    video_enabled: kennelContentForm.video_enabled === true,
     updated_at: new Date().toISOString(),
   };
 
@@ -4413,13 +5135,13 @@ async function saveKennelContent(e) {
     .upsert({ key: "kennel_page", value: payload }, { onConflict: "key" });
 
   if (error) {
-    showToast("Impossible d'enregistrer les photos de la pension : " + error.message);
+    showToast("Impossible d'enregistrer les médias de la pension : " + error.message);
     return;
   }
 
   setKennelContent(payload);
   setKennelContentForm(payload);
-  showToast("Photos de la pension canine enregistrées.");
+  showToast("Médias de la pension canine enregistrés.");
 }
 
 async function saveAppSettings(e) {
@@ -4477,7 +5199,7 @@ async function loadEducationBookings() {
   setEducationBookings(data || []);
 }
 
-function getEducationSlotParticipants(slot) {
+function getEducationSlotBookings(slot) {
   return educationBookings
     .filter((booking) => {
       const activity = educationActivities.find((item) => item.id === slot.activity_id);
@@ -4487,16 +5209,32 @@ function getEducationSlotParticipants(slot) {
 
       return sameSlot && !String(booking.status || "").toLowerCase().startsWith("annul");
     })
+    .sort((a, b) => String(a.client_name || "").localeCompare(String(b.client_name || "")));
+}
+
+function getEducationSlotParticipants(slot) {
+  return getEducationSlotBookings(slot)
     .reduce((sum, booking) => sum + Number(booking.participants || 0), 0);
 }
 
 function getEducationSlotRemaining(slot) {
+  const activity = educationActivities.find((item) => item.id === slot.activity_id);
+
+  if (isTreasureHuntActivity(activity)) {
+    return 1;
+  }
+
   return Math.max(0, Number(slot.capacity || 0) - getEducationSlotParticipants(slot));
 }
 
 function getEducationSlotLabel(slot) {
+  const activity = educationActivities.find((item) => item.id === slot.activity_id);
   const remaining = getEducationSlotRemaining(slot);
   const labelParts = [formatDeliveryDate(slot.activity_date), slot.label].filter(Boolean);
+
+  if (isTreasureHuntActivity(activity)) {
+    return `${labelParts.join(" - ")} - sans limite de participants`;
+  }
 
   return `${labelParts.join(" - ")} - ${remaining > 0 ? `${remaining} place${remaining > 1 ? "s" : ""} restante${remaining > 1 ? "s" : ""}` : "Complet"}`;
 }
@@ -4681,7 +5419,7 @@ async function updateEducationBooking(id, changes) {
 
   if (error) {
     showToast("Impossible de modifier la réservation pédagogique : " + error.message);
-    return;
+    return false;
   }
 
   const booking = educationBookings.find((item) => item.id === id);
@@ -4694,6 +5432,93 @@ async function updateEducationBooking(id, changes) {
     details: changes,
   });
   await Promise.all([loadEducationBookings(), loadBillingDocuments()]);
+  return true;
+}
+
+function openReservationDateEditorFor(booking, scope) {
+  const key = `${scope}-${booking.id}`;
+
+  if (reservationDateEditor.key === key) {
+    setReservationDateEditor({ key: "", booking_date: "", start_date: "", end_date: "" });
+    return;
+  }
+
+  setReservationDateEditor({
+    key,
+    booking_date: booking.booking_date || "",
+    start_date: booking.start_date || "",
+    end_date: booking.end_date || "",
+  });
+}
+
+async function saveReservationDateChanges(booking, scope) {
+  if (scope === "education") {
+    if (!reservationDateEditor.booking_date) {
+      showToast("Choisissez la nouvelle date de l'activite.");
+      return;
+    }
+
+    const activity = educationActivities.find((item) => item.name === booking.activity_type);
+    const matchingSlot = educationDateSlots.find(
+      (slot) => slot.activity_id === activity?.id && slot.activity_date === reservationDateEditor.booking_date
+    );
+    const saved = await updateEducationBooking(booking.id, {
+      booking_date: reservationDateEditor.booking_date,
+      date_slot_id: matchingSlot?.id || null,
+    });
+    if (!saved) return;
+  } else {
+    if (!reservationDateEditor.start_date || !reservationDateEditor.end_date) {
+      showToast("Choisissez les nouvelles dates d'arrivee et de depart.");
+      return;
+    }
+
+    if (reservationDateEditor.end_date < reservationDateEditor.start_date) {
+      showToast("La date de depart ne peut pas etre avant la date d'arrivee.");
+      return;
+    }
+
+    const saved = await updateKennelBooking(booking.id, {
+      start_date: reservationDateEditor.start_date,
+      end_date: reservationDateEditor.end_date,
+    });
+    if (!saved) return;
+  }
+
+  setReservationDateEditor({ key: "", booking_date: "", start_date: "", end_date: "" });
+  showToast(scope === "education" ? "Date de la reservation modifiee." : "Dates du sejour modifiees.");
+}
+
+async function cancelAdminReservation(booking, scope) {
+  if (String(booking.status || "").startsWith("Annul")) {
+    showToast("Cette reservation est deja annulee.");
+    return;
+  }
+
+  const label = scope === "education"
+    ? `${booking.activity_type || "Activite"} du ${formatDeliveryDate(booking.booking_date)}`
+    : `${booking.dog?.name || "Chien"} du ${formatDeliveryDate(booking.start_date)} au ${formatDeliveryDate(booking.end_date)}`;
+  const confirmed = await requestConfirm({
+    title: "Annuler cette reservation ?",
+    message: `${label} sera conservee dans l'historique avec le statut Annulee.`,
+    confirmLabel: "Annuler la reservation",
+    tone: "danger",
+  });
+
+  if (!confirmed) {
+    return;
+  }
+
+  if (scope === "education") {
+    const saved = await updateEducationBooking(booking.id, { status: "Annul\u00e9e" });
+    if (!saved) return;
+  } else {
+    const saved = await updateKennelBooking(booking.id, { status: "Annul\u00e9e" });
+    if (!saved) return;
+  }
+
+  setReservationDateEditor({ key: "", booking_date: "", start_date: "", end_date: "" });
+  showToast("Reservation annulee et conservee dans l'historique.");
 }
 
 async function setOrderArchived(order, archived) {
@@ -4858,7 +5683,7 @@ async function updateKennelBooking(id, changes) {
     } else {
       showToast("Impossible de modifier la réservation pension : " + error.message);
     }
-    return;
+    return false;
   }
 
   const booking = kennelBookings.find((item) => item.id === id);
@@ -4872,6 +5697,7 @@ async function updateKennelBooking(id, changes) {
     details: changes,
   });
   await Promise.all([loadKennelBookings(), loadBillingDocuments()]);
+  return true;
 }
 
 async function updateDogProfile(id, changes) {
@@ -5251,6 +6077,11 @@ async function createAdminKennelBooking(event) {
   async function requestEducationBooking(event) {
     event.preventDefault();
 
+    if (isSubmittingEducationBooking) {
+      showToast("Votre demande est déjà en cours d'enregistrement.");
+      return;
+    }
+
     if (!currentUser || !isLogged) {
       showToast("Connectez-vous pour demander une réservation.");
       setScreen("login");
@@ -5276,42 +6107,97 @@ async function createAdminKennelBooking(event) {
       return;
     }
 
-    if (getEducationSlotRemaining(slot) < children.length) {
+    const accompanistIsParticipant = isFarmVisitActivity(activity);
+    const participantCount = children.length + (accompanistIsParticipant ? 1 : 0);
+
+    if (isTreasureHuntActivity(activity) && children.length < 3) {
+      showToast("Le jeu de piste se réserve pour un minimum de 3 participants payants.", "error");
+      return;
+    }
+    const normalizePerson = (value) => String(value || "").trim().toLocaleLowerCase("fr");
+    const requestedPeopleSignature = [
+      `adult:${normalizePerson(educationBookingForm.accompanistName)}`,
+      ...children.map((child) => `${normalizePerson(child.firstName)}:${Number(child.age || 0)}`).sort(),
+    ].join("|");
+    const duplicateBooking = educationBookings.find((booking) => {
+      const bookedChildren = Array.isArray(booking.children) ? booking.children : [];
+      const bookedPeopleSignature = [
+        `adult:${normalizePerson(booking.accompanist_name)}`,
+        ...bookedChildren
+          .map((child) => `${normalizePerson(child.firstName || child.first_name)}:${Number(child.age || 0)}`)
+          .sort(),
+      ].join("|");
+
+      return booking.user_id === currentUser.id &&
+        booking.date_slot_id === slot.id &&
+        !normalizePerson(booking.status).startsWith("annul") &&
+        bookedPeopleSignature === requestedPeopleSignature;
+    });
+
+    if (duplicateBooking) {
+      showToast(
+        "Attention : une réservation identique existe déjà pour cette activité, cette date et ces participants.",
+        "error"
+      );
+      return;
+    }
+
+    if (!isTreasureHuntActivity(activity) && getEducationSlotRemaining(slot) < participantCount) {
       showToast("Ce créneau est complet ou ne dispose plus d'assez de places.");
       return;
     }
 
-    const { data: educationBookingId, error } = await supabase.rpc("create_education_booking", {
-      p_activity_id: activity.id,
-      p_date_slot_id: slot.id,
-      p_activity_type: activity.name,
-      p_booking_date: slot.activity_date,
-      p_participants: children.length,
-      p_accompanist_name: educationBookingForm.accompanistName.trim(),
-      p_children: children,
-      p_client_name: name || currentUser.email,
-      p_client_email: currentUser.email,
-      p_phone: educationBookingForm.phone.trim(),
-      p_notes: educationBookingForm.notes.trim(),
-    });
+    setIsSubmittingEducationBooking(true);
 
-    if (error) {
-      if (String(error.message || "").includes("education_slot_full")) {
-        showToast("Ce créneau est complet ou ne dispose plus d'assez de places.");
-      } else {
-        showToast("Impossible d'enregistrer la demande : " + error.message);
+    try {
+      const { data: educationBookingId, error } = await supabase.rpc("create_education_booking", {
+        p_activity_id: activity.id,
+        p_date_slot_id: slot.id,
+        p_activity_type: activity.name,
+        p_booking_date: slot.activity_date,
+        p_participants: participantCount,
+        p_accompanist_name: educationBookingForm.accompanistName.trim(),
+        p_children: children,
+        p_client_name: name || currentUser.email,
+        p_client_email: currentUser.email,
+        p_phone: educationBookingForm.phone.trim(),
+        p_notes: educationBookingForm.notes.trim(),
+      });
+
+      if (error) {
+        const errorMessage = String(error.message || "");
+
+        if (errorMessage.includes("education_slot_full")) {
+          showToast("Ce créneau est complet ou ne dispose plus d'assez de places.");
+        } else if (errorMessage.includes("education_minimum_three_participants")) {
+          showToast("Le jeu de piste se réserve pour un minimum de 3 participants payants.", "error");
+        } else if (
+          errorMessage.includes("education_booking_duplicate") ||
+          errorMessage.includes("educational_bookings_active_deduplication_uidx")
+        ) {
+          showToast("Attention : une réservation identique existe déjà pour cette activité, cette date et ces participants.", "error");
+        } else {
+          showToast("Impossible d'enregistrer la demande : " + error.message);
+        }
+        return;
       }
-      return;
-    }
 
-    setEducationBookingForm(emptyEducationBookingForm);
-    await loadEducationBookings();
-    await notifyAdminsAboutEducationBooking(educationBookingId);
-    showToast("Demande de réservation envoyée. Nous confirmerons le créneau rapidement.");
+      setEducationBookingForm(emptyEducationBookingForm);
+      await loadEducationBookings();
+      await notifyAdminsAboutEducationBooking(educationBookingId);
+      showToast("Demande de réservation envoyée. Nous confirmerons le créneau rapidement.");
+    } finally {
+      setIsSubmittingEducationBooking(false);
+    }
   }
 
   async function requestBirthdayBooking(event) {
     event.preventDefault();
+
+    if (isSubmittingBirthdayBooking) {
+      showToast("Votre demande est déjà en cours d'enregistrement.");
+      return;
+    }
 
     if (!currentUser || !isLogged) {
       showToast("Connectez-vous pour envoyer une demande d'anniversaire.");
@@ -5341,6 +6227,9 @@ async function createAdminKennelBooking(event) {
       birthdayBookingForm.notes.trim() ? `Précisions : ${birthdayBookingForm.notes.trim()}` : "",
     ].filter(Boolean).join("\n");
 
+    setIsSubmittingBirthdayBooking(true);
+
+    try {
     const { data: insertedBirthdayBooking, error } = await supabase.from("educational_bookings").insert({
       user_id: currentUser.id,
       activity_id: activity.id,
@@ -5358,7 +6247,13 @@ async function createAdminKennelBooking(event) {
     }).select("id").single();
 
     if (error) {
-      showToast("Impossible d'envoyer la demande d'anniversaire : " + error.message);
+      const errorMessage = String(error.message || "");
+      showToast(
+        errorMessage.includes("education_booking_duplicate") || errorMessage.includes("educational_bookings_active_deduplication_uidx")
+          ? "Vous avez déjà envoyé une demande d'anniversaire pour cette date."
+          : "Impossible d'envoyer la demande d'anniversaire : " + error.message,
+        "error"
+      );
       return;
     }
 
@@ -5366,6 +6261,9 @@ async function createAdminKennelBooking(event) {
     await loadEducationBookings();
     await notifyAdminsAboutEducationBooking(insertedBirthdayBooking?.id);
     showToast("Demande d'anniversaire envoyée. Nous reviendrons vers vous pour organiser la fête.");
+    } finally {
+      setIsSubmittingBirthdayBooking(false);
+    }
   }
 
   async function requestKennelBooking(event) {
@@ -5640,6 +6538,7 @@ function editProduct(product) {
     unit_label: product.unit_label || "piece",
     image: product.image || "",
     size_eggs: product.size_eggs || 0,
+    stock_quantity: product.stock_quantity ?? (Number(product.size_eggs || 0) > 0 ? "" : "0"),
   });
 }
 
@@ -5662,13 +6561,17 @@ async function saveProduct(event) {
     return;
   }
 
+  const eggProduct = isEggProduct({ name });
   const productPayload = {
     id: productId,
     name,
     price,
     unit_label: productForm.unit_label.trim() || "piece",
     image_url: productForm.image.trim(),
-    size_eggs: Number(productForm.size_eggs || 0),
+    size_eggs: eggProduct ? Number(productForm.size_eggs || 0) : 0,
+    stock_quantity: eggProduct
+      ? null
+      : Math.max(0, Math.floor(Number(productForm.stock_quantity) || 0)),
     active: true,
   };
   const { error } = await supabase.from("products").upsert(productPayload);
@@ -5702,6 +6605,22 @@ async function toggleProductActive(product) {
   }
 
   await loadProducts();
+}
+
+async function adjustProductStock(product, delta) {
+  const nextStock = Math.max(0, Number(product.stock_quantity || 0) + delta);
+  const { error } = await supabase
+    .from("products")
+    .update({ stock_quantity: nextStock, updated_at: new Date().toISOString() })
+    .eq("id", product.id);
+
+  if (error) {
+    showToast("Impossible de modifier le stock : " + error.message);
+    return;
+  }
+
+  await loadProducts();
+  showToast(`Stock de ${product.name} : ${nextStock}.`);
 }
 
 async function deleteProduct(product) {
@@ -6056,6 +6975,74 @@ async function deleteKennelService(service) {
   await loadKennelServices();
 }
 
+async function persistClientPushSubscription(user, subscription) {
+  const subscriptionJson = subscription.toJSON();
+  const payload = {
+    p_endpoint: subscription.endpoint,
+    p_p256dh: subscriptionJson.keys?.p256dh || "",
+    p_auth: subscriptionJson.keys?.auth || "",
+    p_user_agent: window.navigator.userAgent,
+  };
+  const { error: rpcError } = await supabase.rpc("claim_client_push_subscription", payload);
+
+  if (!rpcError) return null;
+
+  const missingFunction = String(rpcError.message || "").toLowerCase().includes("claim_client_push_subscription");
+  if (!missingFunction) return rpcError;
+
+  const { error: fallbackError } = await supabase.from("client_push_subscriptions").upsert(
+    {
+      user_id: user.id,
+      endpoint: subscription.endpoint,
+      p256dh: subscriptionJson.keys?.p256dh,
+      auth: subscriptionJson.keys?.auth,
+      user_agent: window.navigator.userAgent,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "endpoint" }
+  );
+
+  return fallbackError;
+}
+
+async function syncClientPushSubscription(user = currentUser) {
+  if (!user) {
+    setClientPushStatus("idle");
+    return;
+  }
+
+  if (
+    !("Notification" in window) ||
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window) ||
+    Notification.permission !== "granted"
+  ) {
+    setClientPushStatus("idle");
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      setClientPushStatus("idle");
+      return;
+    }
+
+    const error = await persistClientPushSubscription(user, subscription);
+    if (error) {
+      console.warn("Synchronisation des notifications client impossible.", error.message);
+      setClientPushStatus("idle");
+      return;
+    }
+
+    setClientPushStatus("enabled");
+  } catch (error) {
+    console.warn("Verification des notifications client impossible.", error);
+    setClientPushStatus("idle");
+  }
+}
+
 async function enableAdminPushNotifications() {
   if (!currentUser || !isAdmin) {
     showToast("Connectez-vous avec le compte admin pour activer les notifications.");
@@ -6161,19 +7148,7 @@ async function enableClientPushNotifications() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       }));
-    const subscriptionJson = subscription.toJSON();
-
-    const { error } = await supabase.from("client_push_subscriptions").upsert(
-      {
-        user_id: currentUser.id,
-        endpoint: subscription.endpoint,
-        p256dh: subscriptionJson.keys?.p256dh,
-        auth: subscriptionJson.keys?.auth,
-        user_agent: window.navigator.userAgent,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "endpoint" }
-    );
+    const error = await persistClientPushSubscription(currentUser, subscription);
 
     if (error) {
       showToast(
@@ -6544,6 +7519,51 @@ async function saveEggProductionLog(event) {
   showToast("Ponte enregistree et stock mis a jour.");
 }
 
+function updateEggRevenueForecastMonth(monthKey, value) {
+  setEggRevenueForecast((forecast) => ({
+    ...forecast,
+    months: {
+      ...forecast.months,
+      [monthKey]: value,
+    },
+  }));
+}
+
+async function saveEggRevenueForecast(event) {
+  event.preventDefault();
+
+  const normalizedMonths = Object.fromEntries(
+    Object.entries(eggRevenueForecast.months || {}).map(([month, volume]) => [
+      month,
+      Math.max(0, Math.round(Number(volume) || 0)),
+    ])
+  );
+  const payload = {
+    year: Number(eggRevenueForecast.year) || new Date().getFullYear(),
+    price_per_egg: Math.max(0, Number(eggRevenueForecast.price_per_egg) || 0),
+    months: normalizedMonths,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase
+    .from("site_settings")
+    .upsert({ key: "egg_revenue_forecast", value: payload }, { onConflict: "key" });
+
+  if (error) {
+    showToast("Impossible d'enregistrer les previsions : " + error.message);
+    return;
+  }
+
+  setEggRevenueForecast(payload);
+  await logAdminAction({
+    actionType: "egg_revenue_forecast_updated",
+    title: "Previsions de vente d'oeufs mises a jour",
+    targetType: "Commandes",
+    targetLabel: String(payload.year),
+    details: { prix_par_oeuf: payload.price_per_egg, volumes: payload.months },
+  });
+  showToast("Previsions de chiffre d'affaires enregistrees.");
+}
+
 const todayIso = getLocalIsoDate();
 const tomorrowDate = new Date(`${todayIso}T00:00:00`);
 tomorrowDate.setDate(tomorrowDate.getDate() + 1);
@@ -6552,6 +7572,56 @@ const recentClientCutoffDate = new Date();
 recentClientCutoffDate.setDate(recentClientCutoffDate.getDate() - 7);
 const recentClientCutoffIso = getLocalIsoDate(recentClientCutoffDate);
 const currentYear = todayIso.slice(0, 4);
+const eggRevenueTrackingStartDate = currentYear === "2026" ? "2026-06-13" : `${currentYear}-01-01`;
+const eggRevenueTrackingStartMonth = eggRevenueTrackingStartDate.slice(0, 7);
+const eggProductUnitPrices = products
+  .filter((product) => isEggProduct(product) && Number(product.size_eggs || 0) > 0 && Number(product.price || 0) > 0)
+  .map((product) => Number(product.price) / Number(product.size_eggs));
+const suggestedEggUnitPrice = eggProductUnitPrices.length
+  ? eggProductUnitPrices.reduce((sum, price) => sum + price, 0) / eggProductUnitPrices.length
+  : 0;
+const eggForecastUnitPrice = Number(eggRevenueForecast.price_per_egg) > 0
+  ? Number(eggRevenueForecast.price_per_egg)
+  : suggestedEggUnitPrice;
+const eggActualRevenueByMonth = orders
+  .filter((order) => normalizeOrderStatus(order.status) === "Livrée")
+  .filter((order) => {
+    const orderDate = String(order.date || "");
+    return orderDate.startsWith(currentYear)
+      && orderDate >= eggRevenueTrackingStartDate
+      && orderDate <= todayIso;
+  })
+  .reduce((months, order) => {
+    const monthKey = String(order.date).slice(0, 7);
+    months[monthKey] = (months[monthKey] || 0) + getEggOrderRevenue(order);
+    return months;
+  }, {});
+const eggRevenueForecastRows = Array.from(
+  { length: 12 },
+  (_, index) => {
+    const monthKey = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
+    const volume = Math.max(0, Number(eggRevenueForecast.months?.[monthKey]) || 0);
+    const potentialRevenue = volume * eggForecastUnitPrice;
+    const actualRevenue = Number(eggActualRevenueByMonth[monthKey] || 0);
+
+    return {
+      monthKey,
+      label: getMonthLabel(monthKey),
+      volume,
+      potentialRevenue,
+      actualRevenue,
+      variance: actualRevenue - potentialRevenue,
+      achievement: potentialRevenue > 0 ? Math.round((actualRevenue / potentialRevenue) * 100) : null,
+    };
+  }
+).filter((month) => month.monthKey >= eggRevenueTrackingStartMonth);
+const eggRevenueForecastVolumeTotal = eggRevenueForecastRows.reduce((sum, month) => sum + month.volume, 0);
+const eggRevenueForecastTotal = eggRevenueForecastRows.reduce((sum, month) => sum + month.potentialRevenue, 0);
+const eggRevenueActualTotal = eggRevenueForecastRows.reduce((sum, month) => sum + month.actualRevenue, 0);
+const eggRevenueVarianceTotal = eggRevenueActualTotal - eggRevenueForecastTotal;
+const eggRevenueTrackingPeriodLabel = currentYear === "2026"
+  ? "du 13 juin au 31 decembre 2026"
+  : `du 1er janvier au 31 decembre ${currentYear}`;
 const eggProductionLogsThisYear = eggProductionLogs.filter((log) => String(log.log_date || "").startsWith(currentYear));
 const eggProductionTotalYear = eggProductionLogsThisYear.reduce((sum, log) => sum + Number(log.eggs_collected || 0), 0);
 const eggProductionAverageYear = eggProductionLogsThisYear.length
@@ -6561,14 +7631,6 @@ const eggProductionBestDay = eggProductionLogsThisYear.reduce(
   (best, log) => (Number(log.eggs_collected || 0) > Number(best?.eggs_collected || 0) ? log : best),
   null
 );
-const eggProductionLast30Days = eggProductionLogs
-  .filter((log) => {
-    const logDate = new Date(`${log.log_date}T00:00:00`);
-    const limitDate = new Date(`${todayIso}T00:00:00`);
-    limitDate.setDate(limitDate.getDate() - 29);
-    return logDate >= limitDate;
-  })
-  .sort((a, b) => String(a.log_date || "").localeCompare(String(b.log_date || "")));
 const eggProductionMonthlyStats = Object.values(
   eggProductionLogsThisYear.reduce((months, log) => {
     const monthKey = String(log.log_date || "").slice(0, 7);
@@ -6585,8 +7647,7 @@ const eggProductionLogsByDate = eggProductionLogs.reduce((days, log) => {
 }, {});
 const eggProductionRatioStartDate = "2026-06-13";
 const eggSalesByDate = orders
-  .filter((order) => order.status !== "Annulée")
-  .filter((order) => !order.archived_at)
+  .filter((order) => normalizeOrderStatus(order.status) !== "Annulée")
   .reduce((days, order) => {
     const date = order.date || "";
 
@@ -6601,6 +7662,7 @@ const eggProductionCalendarDays = getCalendarGridDates(eggProductionCalendarMont
   const produced = eggProductionLogsByDate[day.date] || 0;
   const sold = eggSalesByDate[day.date] || 0;
   const balance = produced - sold;
+  const isFuture = day.date > todayIso;
   const countsForRatio = day.date >= eggProductionRatioStartDate;
 
   return {
@@ -6608,18 +7670,166 @@ const eggProductionCalendarDays = getCalendarGridDates(eggProductionCalendarMont
     produced,
     sold,
     balance,
+    isFuture,
     countsForRatio,
     ratio: countsForRatio ? (produced > 0 ? Math.round((sold / produced) * 100) : sold > 0 ? 100 : 0) : 0,
   };
 });
-const eggProductionCalendarMonthDays = eggProductionCalendarDays.filter((day) => day.inMonth);
+const eggProductionCalendarMonthStart = `${eggProductionCalendarMonth}-01`;
+const eggProductionCalendarOpeningProduced = Object.entries(eggProductionLogsByDate).reduce(
+  (sum, [date, produced]) =>
+    date >= eggProductionRatioStartDate && date < eggProductionCalendarMonthStart && date <= todayIso
+      ? sum + Number(produced || 0)
+      : sum,
+  0
+);
+const eggProductionCalendarOpeningSold = Object.entries(eggSalesByDate).reduce(
+  (sum, [date, sold]) =>
+    date >= eggProductionRatioStartDate && date < eggProductionCalendarMonthStart
+      ? sum + Number(sold || 0)
+      : sum,
+  0
+);
+const eggProductionCalendarOpeningBalance = eggProductionCalendarOpeningProduced - eggProductionCalendarOpeningSold;
+let eggProductionRunningBalance = eggProductionCalendarOpeningBalance;
+const eggProductionCalendarDisplayDays = eggProductionCalendarDays.map((day) => {
+  if (day.inMonth && day.countsForRatio) {
+    eggProductionRunningBalance += day.balance;
+  }
+
+  return {
+    ...day,
+    runningBalance: eggProductionRunningBalance,
+  };
+});
+const eggProductionCalendarMonthDays = eggProductionCalendarDisplayDays.filter((day) => day.inMonth);
 const eggProductionCalendarCountedDays = eggProductionCalendarMonthDays.filter((day) => day.countsForRatio);
 const eggProductionCalendarProduced = eggProductionCalendarCountedDays.reduce((sum, day) => sum + day.produced, 0);
 const eggProductionCalendarSold = eggProductionCalendarCountedDays.reduce((sum, day) => sum + day.sold, 0);
-const eggProductionCalendarBalance = eggProductionCalendarProduced - eggProductionCalendarSold;
-const eggProductionCalendarRatio = eggProductionCalendarProduced > 0
-  ? Math.round((eggProductionCalendarSold / eggProductionCalendarProduced) * 100)
+const eggProductionCalendarAvailable = eggProductionCalendarOpeningBalance + eggProductionCalendarProduced;
+const eggProductionCalendarBalance = eggProductionCalendarAvailable - eggProductionCalendarSold;
+const eggProductionCalendarCumulativeProduced = eggProductionCalendarOpeningProduced + eggProductionCalendarProduced;
+const eggProductionCalendarCumulativeSold = eggProductionCalendarOpeningSold + eggProductionCalendarSold;
+const eggProductionCalendarRatio = eggProductionCalendarCumulativeProduced > 0
+  ? Math.round((eggProductionCalendarCumulativeSold / eggProductionCalendarCumulativeProduced) * 100)
   : 0;
+const eggProductionCalendarPeriodLabel =
+  eggProductionCalendarMonth === eggProductionRatioStartDate.slice(0, 7)
+    ? "depuis le 13/06"
+    : eggProductionCalendarMonth === todayIso.slice(0, 7)
+    ? "mois en cours"
+    : getMonthLabel(eggProductionCalendarMonth);
+const eggProductionMonthlyTotals = Object.values(
+  Object.entries(eggSalesByDate).reduce(
+    (months, [date, sold]) => {
+      if (!String(date || "").startsWith(currentYear) || date < eggProductionRatioStartDate) {
+        return months;
+      }
+
+      const monthKey = String(date).slice(0, 7);
+      const current = months[monthKey] || { key: monthKey, produced: 0, sold: 0 };
+      current.sold += Number(sold || 0);
+      months[monthKey] = current;
+      return months;
+    },
+    eggProductionLogsThisYear.reduce((months, log) => {
+      const date = String(log.log_date || "");
+
+      if (!date || date < eggProductionRatioStartDate || date > todayIso) {
+        return months;
+      }
+
+      const monthKey = date.slice(0, 7);
+      const current = months[monthKey] || { key: monthKey, produced: 0, sold: 0 };
+      current.produced += Number(log.eggs_collected || 0);
+      months[monthKey] = current;
+      return months;
+    }, {})
+  )
+);
+const eggProductionMonthlyComparisonStart = eggProductionRatioStartDate.slice(0, 7);
+const eggProductionLatestSaleMonth =
+  Object.keys(eggSalesByDate)
+    .filter((date) => date >= eggProductionRatioStartDate)
+    .sort()
+    .at(-1)
+    ?.slice(0, 7) || todayIso.slice(0, 7);
+const eggProductionMonthlyComparisonEnd =
+  eggProductionLatestSaleMonth > todayIso.slice(0, 7) ? eggProductionLatestSaleMonth : todayIso.slice(0, 7);
+const eggProductionMonthlyComparisonMonths = [];
+for (
+  let monthCursor = eggProductionMonthlyComparisonStart;
+  monthCursor <= eggProductionMonthlyComparisonEnd;
+  monthCursor = shiftMonth(monthCursor, 1)
+) {
+  eggProductionMonthlyComparisonMonths.push(monthCursor);
+}
+let eggProductionMonthlyRunningBalance = 0;
+let eggProductionMonthlyRunningProduced = 0;
+let eggProductionMonthlyRunningSold = 0;
+const eggProductionMonthlyComparison = eggProductionMonthlyComparisonMonths
+  .map((monthKey) => {
+    const month = eggProductionMonthlyTotals.find((item) => item.key === monthKey) || {
+      key: monthKey,
+      produced: 0,
+      sold: 0,
+    };
+    const openingBalance = eggProductionMonthlyRunningBalance;
+    const available = openingBalance + Number(month.produced || 0);
+    eggProductionMonthlyRunningProduced += Number(month.produced || 0);
+    eggProductionMonthlyRunningSold += Number(month.sold || 0);
+    eggProductionMonthlyRunningBalance = available - Number(month.sold || 0);
+
+    return {
+      ...month,
+      label: getMonthLabel(month.key).replace(/\s+\d{4}$/u, "").slice(0, 3),
+      title: getMonthLabel(month.key),
+      openingBalance,
+      available,
+      balance: Number(month.produced || 0) - Number(month.sold || 0),
+      cumulativeBalance: eggProductionMonthlyRunningBalance,
+      cumulativeProduced: eggProductionMonthlyRunningProduced,
+      cumulativeSold: eggProductionMonthlyRunningSold,
+      ratio:
+        eggProductionMonthlyRunningProduced > 0
+          ? Math.round((eggProductionMonthlyRunningSold / eggProductionMonthlyRunningProduced) * 100)
+          : 0,
+    };
+  })
+  .sort((a, b) => a.key.localeCompare(b.key));
+const eggProductionDailyComparison = eggProductionCalendarMonthDays
+  .map((day) => ({
+    key: day.date,
+    label: String(day.dayNumber),
+    title: `${formatDeliveryDate(day.date)}${day.isFuture ? " - ventes prévues" : ""}`,
+    produced: day.date >= eggProductionRatioStartDate ? day.produced : 0,
+    sold: day.date >= eggProductionRatioStartDate ? day.sold : 0,
+    balance: day.date >= eggProductionRatioStartDate ? day.balance : 0,
+    isFuture: day.isFuture,
+    countsForTotal: day.countsForRatio,
+  }));
+const eggProductionComparisonData =
+  eggProductionChartMode === "month" ? eggProductionMonthlyComparison.slice(-12) : eggProductionDailyComparison;
+const eggProductionChartMax = Math.max(
+  1,
+  ...eggProductionComparisonData.flatMap((item) => [Number(item.produced || 0), Number(item.sold || 0)])
+);
+const eggProductionChartProducedTotal = eggProductionComparisonData.reduce(
+  (sum, item) => sum + (item.countsForTotal === false ? 0 : Number(item.produced || 0)),
+  0
+);
+const eggProductionChartSoldTotal = eggProductionComparisonData.reduce(
+  (sum, item) => sum + (item.countsForTotal === false ? 0 : Number(item.sold || 0)),
+  0
+);
+const eggProductionChartBalance =
+  eggProductionChartMode === "month" && eggProductionComparisonData.length > 0
+    ? Number(eggProductionComparisonData[eggProductionComparisonData.length - 1].cumulativeBalance || 0)
+    : eggProductionCalendarBalance;
+const eggProductionChartRatio =
+  eggProductionChartMode === "month" && eggProductionComparisonData.length > 0
+    ? Number(eggProductionComparisonData[eggProductionComparisonData.length - 1].ratio || 0)
+    : eggProductionCalendarRatio;
 const eggProductionRecentLogs = eggProductionLogs
   .filter((log) => {
     const logDate = new Date(`${log.log_date}T00:00:00`);
@@ -6785,6 +7995,33 @@ const filteredCustomerProfiles = customerProfiles
 
     return String(b.created_at || "").localeCompare(String(a.created_at || ""));
   });
+
+function getClientAppVersionStatus(profileId) {
+  const version = clientAppVersions.find((item) => String(item.user_id) === String(profileId));
+
+  if (!version) {
+    return { tone: "unknown", label: "Jamais vérifié", version: null };
+  }
+
+  const clientReleaseKey = String(
+    version.release_key || version.build_commit || version.build_time || version.app_version || ""
+  );
+  const isCurrent = Boolean(clientReleaseKey && clientReleaseKey === appReleaseKey);
+
+  return {
+    tone: isCurrent ? "current" : "outdated",
+    label: isCurrent ? "À jour" : "Mise à jour nécessaire",
+    version,
+  };
+}
+
+const clientVersionSummary = customerProfiles
+  .filter((profile) => !profile.is_admin)
+  .reduce((summary, profile) => {
+    const status = getClientAppVersionStatus(profile.id);
+    summary[status.tone] += 1;
+    return summary;
+  }, { current: 0, outdated: 0, unknown: 0 });
 
 function getClientPushSubscriptions(profileId) {
   return clientPushSubscriptions.filter((subscription) => subscription.user_id === profileId);
@@ -7263,11 +8500,13 @@ const educationSlotsByDate = availableEducationDateSlots.reduce((days, slot) => 
 const educationCalendarDays = getCalendarGridDates(educationCalendarMonth).map((day) => {
   const slots = educationSlotsByDate.get(day.date) || [];
   const remaining = slots.reduce((sum, slot) => sum + Math.max(0, slot.remaining || 0), 0);
+  const unlimited = isTreasureHuntActivity(selectedEducationActivity) && slots.length > 0;
 
   return {
     ...day,
     slots,
     remaining,
+    unlimited,
     available: slots.some((slot) => slot.remaining > 0),
   };
 });
@@ -7285,6 +8524,12 @@ const clientAccountKennelBookings = clientAccountEmail
       .filter((booking) => String(booking.client_email || "").trim().toLowerCase() === clientAccountEmail)
       .sort((a, b) => String(b.start_date || "").localeCompare(String(a.start_date || "")))
   : [];
+const unsignedConfirmedKennelBookings = clientAccountKennelBookings.filter(
+  (booking) =>
+    String(booking.status || "").trim().toLowerCase().startsWith("confirm") &&
+    !kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id))
+);
+const nextUnsignedKennelBooking = unsignedConfirmedKennelBookings[0] || null;
 const clientAccountOccasionalSales = myOccasionalSaleReservations;
 const clientDemandCount =
   myOrders.length +
@@ -7454,6 +8699,9 @@ const deliveryPlanning = (() => {
 
 const selectedPlanningDay =
   deliveryPlanning.find((day) => day.date === routeDate) || deliveryPlanning[0] || null;
+const selectedDeliveryRouteBatches = selectedPlanningDay
+  ? getDeliveryRouteBatches(selectedPlanningDay.date)
+  : [];
 
 const upcomingDeliveryDay =
   deliveryPlanning.find((day) => day.date !== "Sans date" && String(day.date || "") >= todayIso) ||
@@ -7508,7 +8756,7 @@ const clientAdminReplies = currentUser?.id
     )
   : [];
 const clientUnreadAdminReplies = clientAdminReplies.filter(
-  (reply) => !clientMessagesSeenAt || String(reply.created_at || "") > clientMessagesSeenAt
+  (reply) => !reply.client_read_at && (!clientMessagesSeenAt || String(reply.created_at || "") > clientMessagesSeenAt)
 );
 const clientUnreadAdminReplyCount = clientUnreadAdminReplies.length;
 const latestClientUnreadReply = [...clientUnreadAdminReplies].sort(
@@ -7520,6 +8768,16 @@ const unhandledContactMessagesCount = activeContactMessages.filter(
 const urgentContactMessages = activeContactMessages
   .filter((message) => !["Traité", "Traitee", "Traité"].includes(message.status || "Nouveau"))
   .slice(0, 6);
+const adminContactMessagesToRelance = activeContactMessages
+  .filter((message) => {
+    const status = String(message.status || "Nouveau")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+    return status !== "traite" && status !== "traitee";
+  })
+  .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
 const pendingEducationRequestsCount = educationBookings.filter(
   (booking) => !booking.archived_at && (booking.status || "Demandée") === "Demandée"
 ).length;
@@ -7529,6 +8787,9 @@ const pendingKennelRequestsCount = kennelBookings.filter(
 const pendingReservationsCount = pendingEducationRequestsCount + pendingKennelRequestsCount;
 const occasionalSalesToFollowUp = occasionalSaleReservations.filter((reservation) =>
   !["Terminée", "Annulée"].includes(reservation.status || "Nouvelle")
+);
+const newOccasionalSaleReservations = occasionalSaleReservations.filter(
+  (reservation) => (reservation.status || "Nouvelle") === "Nouvelle"
 );
 const adminFastActions = [
   {
@@ -7567,12 +8828,12 @@ const adminFastActions = [
   {
     id: "fast-occasional-sales",
     label: "Ventes ponctuelles à rappeler",
-    count: occasionalSalesToFollowUp.length,
+    count: newOccasionalSaleReservations.length,
     detail:
       occasionalSalesToFollowUp.length > 0
         ? `${occasionalSalesToFollowUp[0].client_name || "Client"} - ${occasionalSalesToFollowUp[0].quantity || 1} x ${occasionalSalesToFollowUp[0].item_name || "vente ponctuelle"}.`
         : "Aucune vente ponctuelle à rappeler.",
-    tone: occasionalSalesToFollowUp.length > 0 ? "info" : "clear",
+    tone: newOccasionalSaleReservations.length > 0 ? "danger" : "clear",
     action: () => setAdminView("occasionalSales"),
   },
 ];
@@ -7704,6 +8965,28 @@ function applyAdminShortcut(shortcut) {
   }
 }
 
+function openKennelBookingFromPlanning(booking) {
+  if (!booking?.id) return;
+
+  const bookingId = String(booking.id);
+  setAdminView("kennel");
+  setAdminArchiveView("active");
+  setKennelReservationFilter("all");
+  setFocusedKennelBookingId(bookingId);
+
+  if (canUseBrowser) {
+    window.setTimeout(() => {
+      document.getElementById(`kennel-booking-${bookingId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 120);
+    window.setTimeout(() => {
+      setFocusedKennelBookingId((current) => current === bookingId ? "" : current);
+    }, 3200);
+  }
+}
+
 const activeKennelBookings = kennelBookings.filter((booking) => {
   if (booking.archived_at) {
     return false;
@@ -7771,6 +9054,14 @@ const openEducationBookings = educationBookings.filter(
   (booking) => !booking.archived_at && !String(booking.status || "").toLowerCase().startsWith("annul")
 );
 const openKennelBookings = activeKennelBookings.filter((booking) => String(booking.end_date || "") >= todayIso);
+const unsignedAdminKennelContractBookings = openKennelBookings
+  .filter(
+    (booking) =>
+      String(booking.status || "").trim().toLowerCase().startsWith("confirm") &&
+      !kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id))
+  )
+  .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
+const kennelAdminAttentionCount = pendingKennelRequestsCount + unsignedAdminKennelContractBookings.length;
 const kennelPaymentTrackingStartDate = "2026-06-01";
 const kennelPaymentTrackedBookings = kennelBookings.filter(
   (booking) =>
@@ -8026,6 +9317,15 @@ const importantAdminAlerts = [
     detail: `${dueAdminReminders.length} rappel${dueAdminReminders.length > 1 ? "s" : ""} à traiter, dont "${dueAdminReminders[0].title}" pour le ${formatDeliveryDate(dueAdminReminders[0].due_date)}.`,
     actionLabel: "Voir les rappels",
     action: () => setAdminView("clients"),
+  },
+  unsignedAdminKennelContractBookings.length > 0 && {
+    id: "unsigned-kennel-contracts",
+    tone: "warning",
+    priorityLabel: "Orange",
+    title: "Contrat pension non signe",
+    detail: `${unsignedAdminKennelContractBookings.length} contrat${unsignedAdminKennelContractBookings.length > 1 ? "s" : ""} a faire signer, dont ${unsignedAdminKennelContractBookings[0].dog?.name || "un chien"} - ${unsignedAdminKennelContractBookings[0].client_name || "Client"}.`,
+    actionLabel: "Voir la reservation",
+    action: () => openKennelBookingFromPlanning(unsignedAdminKennelContractBookings[0]),
   },
   kennelNearlyFullNights.length > 0 && {
     id: "kennel-nearly-full",
@@ -8290,6 +9590,7 @@ const configuredImageUrls = [
   ...parseGalleryImages(kennelContent.gallery_images),
   homeFeaturedEvent.image_url,
   ...parseGalleryImages(homeFeaturedEvent.gallery_images),
+  homeVideo.poster_url,
   ...(homeNewsContent.items || []).map((item) => item.image_url),
   occasionalSalesContent.image_url,
   ...(occasionalSalesContent.items || []).map((item) => item.image_url),
@@ -8445,23 +9746,36 @@ const automationFreshnessLimit = new Date(
 const automationCards = [
   {
     key: "daily_payments",
-    title: "Email quotidien des impayés",
-    description: "Envoie chaque matin la liste des séjours pension restant à régler.",
+    title: "Synthèse quotidienne admin",
+    description: "Envoie chaque matin le ratio des œufs, le solde, les urgences et les impayés pension.",
   },
   {
     key: "egg_reminders",
     title: "Rappels de commande d'œufs",
-    description: "Prévient les clients habituels 48 h et 24 h avant leur jour de commande.",
+    description: "Prévient les clients habituels 48 h et 24 h avant leur jour de commande, et relance une seule fois les nouveaux clients sans première commande.",
   },
   {
     key: "google_reviews",
     title: "Demandes d'avis Google",
     description: "Propose un avis après une activité ferme ou un séjour pension terminé.",
   },
+  {
+    key: "kennel_contracts",
+    title: "Contrats pension à signer",
+    description: "Relance à 7 jours puis à 2 jours les clients dont le contrat de pension n'est toujours pas signé.",
+  },
+  {
+    key: "client_messages",
+    title: "Messages clients non lus",
+    description: "Envoie un rappel courtois unique lorsqu'une reponse admin reste non lue pendant plus de 24 heures.",
+  },
 ].map((automation) => {
   const latestRun = automationRuns.find((run) => run.automation_key === automation.key) || null;
+  const enabled = automationSettings[automation.key] !== false;
   const isStale = Boolean(latestRun?.started_at && latestRun.started_at < automationFreshnessLimit);
-  const tone = !latestRun
+  const tone = !enabled
+    ? "paused"
+    : !latestRun
     ? "info"
     : latestRun.status === "failed"
     ? "danger"
@@ -8471,7 +9785,7 @@ const automationCards = [
     ? "warning"
     : "success";
 
-  return { ...automation, latestRun, isStale, tone };
+  return { ...automation, latestRun, isStale, tone, enabled };
 });
 const automationIssueCount = automationCards.filter((automation) =>
   ["danger", "warning"].includes(automation.tone)
@@ -8604,7 +9918,9 @@ function getEducationBookingAmount(booking) {
   }
 
   const activity = educationActivities.find((item) => item.name === booking.activity_type);
-  return Number(activity?.price || 0) * Number(booking.participants || 0);
+  return isTreasureHuntActivity(activity || booking)
+    ? Number(activity?.price || 50)
+    : Number(activity?.price || 0) * Number(booking.participants || 0);
 }
 
 function getKennelDailyBillingService() {
@@ -8992,6 +10308,39 @@ function isEggProduct(product) {
   const normalizedName = String(product.name || "").toLowerCase().replaceAll("œ", "oe");
 
   return normalizedName.includes("oeuf");
+}
+
+function getEggOrderRevenue(order) {
+  if (Array.isArray(order.items) && order.items.length > 0) {
+    return order.items
+      .filter((item) => isEggProduct(item) || Number(item.size_eggs || 0) > 0)
+      .reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.price || 0), 0);
+  }
+
+  const box6Price = products.find((product) => product.id === "box6")?.price || 0;
+  const box12Price = products.find((product) => product.id === "box12")?.price || 0;
+
+  return Number(order.box6 || 0) * box6Price + Number(order.box12 || 0) * box12Price;
+}
+
+function isFarmVisitActivity(activity) {
+  const normalizedName = String(activity?.name || activity?.activity_type || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return normalizedName.includes("autonom") ||
+    (normalizedName.includes("visite") && normalizedName.includes("ferme"));
+}
+
+function isTreasureHuntActivity(activity) {
+  const normalizedName = String(activity?.name || activity?.activity_type || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return normalizedName.includes("jeu de piste") ||
+    String(activity?.id || "").toLowerCase().includes("piste");
 }
 
 function getProductUnitPriceLabel(product) {
@@ -9588,6 +10937,23 @@ function getDeliveryMapOrders(date = routeDate) {
   );
 }
 
+function getDeliveryRouteBatches(date = routeDate) {
+  const routeOrders = getDeliveryMapOrders(date);
+  const batches = [];
+
+  for (let startIndex = 0; startIndex < routeOrders.length; startIndex += 10) {
+    batches.push({
+      orders: routeOrders.slice(startIndex, startIndex + 10),
+      origin: startIndex > 0 ? String(routeOrders[startIndex - 1]?.address || "").trim() : "",
+      startNumber: startIndex + 1,
+      endNumber: Math.min(startIndex + 10, routeOrders.length),
+      total: routeOrders.length,
+    });
+  }
+
+  return batches;
+}
+
 function normalizeRouteAddressPart(value) {
   return String(value || "")
     .normalize("NFD")
@@ -9653,25 +11019,27 @@ function openOrderAddressMap(order) {
   );
 }
 
-function openDeliveryRouteMap(date = routeDate) {
+function openDeliveryRouteMap(date = routeDate, batchIndex = 0) {
   if (!date) {
     showToast("Choisissez une date de livraison pour ouvrir la carte.");
     return;
   }
 
-  const routeOrders = getDeliveryMapOrders(date);
+  const routeBatches = getDeliveryRouteBatches(date);
+  const routeBatch = routeBatches[batchIndex];
+  const routeOrders = routeBatch?.orders || [];
 
   if (routeOrders.length === 0) {
     showToast("Aucune adresse de livraison disponible pour cette date.");
     return;
   }
 
-  if (routeOrders.length === 1) {
+  if (routeOrders.length === 1 && !routeBatch.origin) {
     openOrderAddressMap(routeOrders[0]);
     return;
   }
 
-  const addresses = routeOrders.slice(0, 10).map((order) => order.address.trim());
+  const addresses = routeOrders.map((order) => order.address.trim());
   const destination = addresses[addresses.length - 1];
   const waypoints = addresses.slice(0, -1);
   const url = new URL("https://www.google.com/maps/dir/");
@@ -9680,14 +11048,18 @@ function openDeliveryRouteMap(date = routeDate) {
   url.searchParams.set("travelmode", "driving");
   url.searchParams.set("destination", destination);
 
+  if (routeBatch.origin) {
+    url.searchParams.set("origin", routeBatch.origin);
+  }
+
   if (waypoints.length > 0) {
     url.searchParams.set("waypoints", waypoints.join("|"));
   }
 
   window.open(url.toString(), "_blank", "noopener,noreferrer");
 
-  if (routeOrders.length > 10) {
-    showToast("Google Maps limite la tournée automatique : les 10 premières adresses ont été envoyées.");
+  if (routeBatches.length > 1) {
+    showToast(`Partie ${batchIndex + 1} sur ${routeBatches.length} ouverte dans Google Maps.`);
   }
 }
 
@@ -9903,7 +11275,7 @@ function openTutorialFromPage(guideId) {
                 <Dog size={17} />
                 Pension canine
               </button>
-              <button onClick={() => setScreen("contact")} className="app-nav__button">
+              <button onClick={openClientMessages} className="app-nav__button">
                 <Mail size={17} />
                 Contact
               </button>
@@ -9968,6 +11340,7 @@ function openTutorialFromPage(guideId) {
                     setIsLogged(false);
                     setIsAdmin(false);
                     setCanOrderEggs(false);
+                    setClientPushStatus("idle");
                     setName("");
                     setDeliveryAddress("");
                     setProfileForm({ fullName: "", phone: "", deliveryAddress: "" });
@@ -10221,7 +11594,7 @@ function openTutorialFromPage(guideId) {
                     <button
                       onClick={() => {
                         void trackSiteEvent("click", "home", "Accueil", { action: "home_cta_contact", label: "Nous contacter" });
-                        setScreen("contact");
+                        openClientMessages();
                       }}
                       className="cta cta--light"
                     >
@@ -10259,6 +11632,39 @@ function openTutorialFromPage(guideId) {
                 </div>
               </div>
             </div>
+
+            {homeVideo.enabled && homeVideo.video_url && (
+              <section className="home-video-feature" aria-label={homeVideo.title || "Video a la une"}>
+                <div className="home-video-feature__media">
+                  <video
+                    key={homeVideo.video_url}
+                    src={homeVideo.video_url}
+                    poster={homeVideo.poster_url || undefined}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    autoPlay={homeVideo.autoplay === true}
+                    muted={homeVideo.autoplay === true}
+                    loop={homeVideo.autoplay === true}
+                  >
+                    Votre navigateur ne peut pas lire cette video.
+                  </video>
+                </div>
+                <div className="home-video-feature__content">
+                  <p className="shop-eyebrow">{homeVideo.eyebrow || "En images"}</p>
+                  <h2>{homeVideo.title || "La vie aux Poulettes du Marais"}</h2>
+                  <p>{homeVideo.text}</p>
+                  <div className="home-video-feature__actions">
+                    <button type="button" onClick={() => setScreen("kennel")}>
+                      <PawPrint size={18} /> Decouvrir la pension
+                    </button>
+                    <button type="button" onClick={() => setScreen("education")}>
+                      <School size={18} /> Ferme pedagogique
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {homeFeaturedEvent.enabled && (
                 <section className="home-featured-event" aria-label="Événement à l'honneur">
@@ -10395,7 +11801,7 @@ function openTutorialFromPage(guideId) {
                         required
                         type="number"
                         min="1"
-                        max={getOccasionalSaleAvailableQuantity(activeOccasionalSaleItems.find((item) => item.id === occasionalSaleReservationForm.itemId)) || undefined}
+                        max={getOccasionalSaleAvailableQuantity(activeOccasionalSaleItems.find((item) => item.id === occasionalSaleReservationForm.itemId)) ?? undefined}
                         value={occasionalSaleReservationForm.quantity}
                         onChange={(e) => setOccasionalSaleReservationForm({ ...occasionalSaleReservationForm, quantity: e.target.value })}
                       />
@@ -10848,7 +12254,7 @@ function openTutorialFromPage(guideId) {
                   {publicContactPhone && publicContactEmail && <span> - </span>}
                   {publicContactEmail && <span>{publicContactEmail}</span>}
                 </p>
-                <button type="button" className="primary-action" onClick={() => setScreen("contact")}>
+                <button type="button" className="primary-action" onClick={openClientMessages}>
                   Aller au contact
                   <ArrowRight size={18} />
                 </button>
@@ -10875,7 +12281,7 @@ function openTutorialFromPage(guideId) {
                     {formatDeliveryDate(homeFeaturedEvent.event_date)}
                   </strong>
                 )}
-                <button type="button" className="primary-action" onClick={() => setScreen("contact")}>
+                <button type="button" className="primary-action" onClick={openClientMessages}>
                   Se renseigner
                 </button>
               </div>
@@ -11017,7 +12423,7 @@ function openTutorialFromPage(guideId) {
                         <strong>{activity.name}</strong>
                         <p>{activity.description}</p>
                         <em>
-                          {activity.price > 0 ? `${activity.price.toFixed(2)} EUR` : "Tarif sur demande"}
+                          {activity.price > 0 ? `${activity.price.toFixed(2)} EUR${isTreasureHuntActivity(activity) ? " / partie - minimum 3 personnes" : ""}` : "Tarif sur demande"}
                           {activity.season_label ? ` - ${activity.season_label}` : ""}
                         </em>
                       </div>
@@ -11085,7 +12491,7 @@ function openTutorialFromPage(guideId) {
                         disabled={!day.available}
                       >
                         <strong>{day.dayNumber}</strong>
-                        <span>{day.available ? `${day.remaining} place${day.remaining > 1 ? "s" : ""}` : "—"}</span>
+                        <span>{day.available ? day.unlimited ? "Sans limite" : `${day.remaining} place${day.remaining > 1 ? "s" : ""}` : "—"}</span>
                       </button>
                     ))}
                   </div>
@@ -11171,8 +12577,8 @@ function openTutorialFromPage(guideId) {
                   />
                 </label>
 
-                <button type="submit" className="primary-action">
-                  Envoyer la demande d'anniversaire
+                <button type="submit" className="primary-action" disabled={isSubmittingBirthdayBooking}>
+                  {isSubmittingBirthdayBooking ? "Enregistrement..." : "Envoyer la demande d'anniversaire"}
                 </button>
               </form>
               ) : (
@@ -11217,9 +12623,15 @@ function openTutorialFromPage(guideId) {
                     onChange={(e) => setEducationBookingForm({ ...educationBookingForm, accompanistName: e.target.value })}
                     placeholder="Nom et prénom"
                   />
+                  {isFarmVisitActivity(selectedEducationActivity) && (
+                    <small>L'accompagnateur compte comme participant et sera inclus dans le tarif.</small>
+                  )}
                 </label>
                 <div className="children-fields">
                   <span>Enfants participants</span>
+                  {isTreasureHuntActivity(selectedEducationActivity) && (
+                    <small>Le jeu de piste se réserve pour 3 participants minimum, sans limite maximum.</small>
+                  )}
                   {educationBookingForm.children.map((child, index) => (
                     <div key={index} className="children-row">
                       <input
@@ -11264,8 +12676,8 @@ function openTutorialFromPage(guideId) {
                   />
                 </label>
 
-                <button type="submit" className="primary-action">
-                  Envoyer la demande
+                <button type="submit" className="primary-action" disabled={isSubmittingEducationBooking}>
+                  {isSubmittingEducationBooking ? "Enregistrement..." : "Envoyer la demande"}
                 </button>
               </form>
               )}
@@ -11276,12 +12688,33 @@ function openTutorialFromPage(guideId) {
         {screen === "kennel" && (
           <section className="service-page">
             <div
-              className="service-hero service-hero--kennel"
+              className={`service-hero service-hero--kennel${
+                kennelContent.video_enabled && kennelContent.video_url ? " service-hero--has-video" : ""
+              }`}
               style={{
-                backgroundImage: `linear-gradient(120deg, rgba(255, 253, 246, 0.96), rgba(230, 239, 226, 0.84)), url("${kennelContent.image_url || DEFAULT_KENNEL_CONTENT.image_url}")`,
+                backgroundImage: kennelContent.video_enabled && kennelContent.video_url
+                  ? `url("${kennelContent.image_url || DEFAULT_KENNEL_CONTENT.image_url}")`
+                  : `linear-gradient(120deg, rgba(255, 253, 246, 0.96), rgba(230, 239, 226, 0.84)), url("${kennelContent.image_url || DEFAULT_KENNEL_CONTENT.image_url}")`,
               }}
             >
-              <div>
+              {kennelContent.video_enabled && kennelContent.video_url && (
+                <>
+                  <video
+                    key={kennelContent.video_url}
+                    className="service-hero__video"
+                    src={kennelContent.video_url}
+                    poster={kennelContent.image_url || DEFAULT_KENNEL_CONTENT.image_url}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    aria-hidden="true"
+                  />
+                  <span className="service-hero__video-overlay" aria-hidden="true" />
+                </>
+              )}
+              <div className="service-hero__content">
                 <p className="shop-eyebrow">Pension canine</p>
                 <h1>Préparer le séjour de votre chien</h1>
                 <p>
@@ -12075,13 +13508,23 @@ function openTutorialFromPage(guideId) {
                     <div className="product-body">
                       <div>
                         <h2>{p.name}</h2>
-                        <p>{p.size_eggs > 0 ? "Œufs frais de l'élevage, préparés pour votre livraison." : "Produit frais disponible à la commande."}</p>
+                        {isEggProduct(p) && p.size_eggs > 0 && (
+                          <p>Œufs frais de l'élevage, préparés pour votre livraison.</p>
+                        )}
                       </div>
 
                       <div className="product-meta">
                         <strong>{p.price.toFixed(2)} EUR</strong>
                         <span>{getProductUnitPriceLabel(p)}</span>
                       </div>
+
+                      {p.stock_quantity !== null && p.stock_quantity !== undefined && (
+                        <div className={`product-stock-badge ${Number(p.stock_quantity) <= 0 ? "is-empty" : ""}`}>
+                          {Number(p.stock_quantity) > 0
+                            ? `${p.stock_quantity} ${p.unit_label || "unite"}${Number(p.stock_quantity) > 1 ? "s" : ""} disponible${Number(p.stock_quantity) > 1 ? "s" : ""}`
+                            : "Produit epuise"}
+                        </div>
+                      )}
 
                       <div className="qty-control" aria-label={`Quantite ${p.name}`}>
                         <button
@@ -12099,6 +13542,11 @@ function openTutorialFromPage(guideId) {
                           type="button"
                           onClick={() => updateQty(p.id, 1)}
                           aria-label={`Ajouter une ${p.name}`}
+                          disabled={
+                            p.stock_quantity !== null &&
+                            p.stock_quantity !== undefined &&
+                            (cart[p.id] || 0) >= Number(p.stock_quantity || 0)
+                          }
                         >
                           <Plus size={18} />
                         </button>
@@ -12201,7 +13649,7 @@ function openTutorialFromPage(guideId) {
                   type="button"
                   onClick={isLogged ? placeOrder : () => setScreen("register")}
                   className="order-submit"
-                  disabled={(isLogged && !canOrderEggs && !isAdmin) || isPlacingOrder}
+                  disabled={(isLogged && !canOrderEggs && !isAdmin) || isPlacingOrder || hasUnavailableCartItems}
                 >
                   {isPlacingOrder ? "Commande en cours..." : isLogged ? "Valider ma commande" : "Créer mon compte"}
                 </button>
@@ -12262,6 +13710,28 @@ function openTutorialFromPage(guideId) {
 
         {screen === "myOrders" && (
           <section className="orders-page">
+            {nextUnsignedKennelBooking && (
+              <aside className="client-contract-alert" role="alert">
+                <span className="client-contract-alert__icon">
+                  <ClipboardList size={28} />
+                </span>
+                <div>
+                  <strong>
+                    {unsignedConfirmedKennelBookings.length > 1
+                      ? `${unsignedConfirmedKennelBookings.length} contrats de pension sont à signer`
+                      : "Votre contrat de pension est prêt à être signé"}
+                  </strong>
+                  <p>
+                    Séjour de {nextUnsignedKennelBooking.dog?.name || "votre chien"}, du {formatDeliveryDate(nextUnsignedKennelBooking.start_date)} au {formatDeliveryDate(nextUnsignedKennelBooking.end_date)}.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setSelectedContractBooking(nextUnsignedKennelBooking)}>
+                  Voir et signer le contrat
+                  <ArrowRight size={18} />
+                </button>
+              </aside>
+            )}
+
             <aside className={`client-notification-guide ${clientPushStatus === "enabled" ? "is-enabled" : ""}`}>
               <div>
                 <span>
@@ -12289,6 +13759,28 @@ function openTutorialFromPage(guideId) {
               </button>
             </aside>
 
+            {nextUnsignedKennelBooking && (
+              <aside className="client-contract-alert" role="alert">
+                <span className="client-contract-alert__icon">
+                  <ClipboardList size={28} />
+                </span>
+                <div>
+                  <strong>
+                    {unsignedConfirmedKennelBookings.length > 1
+                      ? `${unsignedConfirmedKennelBookings.length} contrats de pension sont a signer`
+                      : "Votre contrat de pension est pret a etre signe"}
+                  </strong>
+                  <p>
+                    Sejour de {nextUnsignedKennelBooking.dog?.name || "votre chien"}, du {formatDeliveryDate(nextUnsignedKennelBooking.start_date)} au {formatDeliveryDate(nextUnsignedKennelBooking.end_date)}.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setSelectedContractBooking(nextUnsignedKennelBooking)}>
+                  Voir et signer le contrat
+                  <ArrowRight size={18} />
+                </button>
+              </aside>
+            )}
+
             {clientUnreadAdminReplyCount > 0 && (
               <aside className="client-message-alert" role="status">
                 <div>
@@ -12305,7 +13797,7 @@ function openTutorialFromPage(guideId) {
                     </p>
                   </div>
                 </div>
-                <button type="button" onClick={() => setScreen("contact")}>
+                <button type="button" onClick={openClientMessages}>
                   Voir mes messages
                 </button>
               </aside>
@@ -12380,7 +13872,7 @@ function openTutorialFromPage(guideId) {
                 <em>{clientNotificationLabel}</em>
                 <ChevronRight size={20} />
               </button>
-              <button type="button" onClick={() => setScreen("contact")}>
+              <button type="button" onClick={openClientMessages}>
                 {clientUnreadAdminReplyCount > 0 && (
                   <span className="client-message-badge">{clientUnreadAdminReplyCount}</span>
                 )}
@@ -12640,7 +14132,7 @@ function openTutorialFromPage(guideId) {
                   })}
                   {clientContactMessages.length === 0 && <p>Aucun échange pour le moment.</p>}
                 </div>
-                <button type="button" onClick={() => setScreen("contact")} className="client-account-edit-button">
+                <button type="button" onClick={openClientMessages} className="client-account-edit-button">
                   Ouvrir la messagerie
                 </button>
               </section>
@@ -12650,6 +14142,28 @@ function openTutorialFromPage(guideId) {
 
         {screen === "myReservations" && (
           <section className="orders-page">
+            {nextUnsignedKennelBooking && (
+              <aside className="client-contract-alert" role="alert">
+                <span className="client-contract-alert__icon">
+                  <ClipboardList size={28} />
+                </span>
+                <div>
+                  <strong>
+                    {unsignedConfirmedKennelBookings.length > 1
+                      ? `${unsignedConfirmedKennelBookings.length} contrats de pension sont à signer`
+                      : "Votre contrat de pension est prêt à être signé"}
+                  </strong>
+                  <p>
+                    Séjour de {nextUnsignedKennelBooking.dog?.name || "votre chien"}, du {formatDeliveryDate(nextUnsignedKennelBooking.start_date)} au {formatDeliveryDate(nextUnsignedKennelBooking.end_date)}.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setSelectedContractBooking(nextUnsignedKennelBooking)}>
+                  Voir et signer le contrat
+                  <ArrowRight size={18} />
+                </button>
+              </aside>
+            )}
+
             <div className="orders-header">
               <div>
                 <p className="shop-eyebrow">Espace client</p>
@@ -12930,6 +14444,104 @@ function openTutorialFromPage(guideId) {
               </div>
             </div>
 
+            {adminContactMessagesToRelance.length > 0 && (
+              <section className="admin-payment-alert-banner admin-message-alert-banner" aria-label="Messages clients non traites">
+                <div className="admin-payment-alert-banner__icon">
+                  <MessageSquareText size={30} />
+                </div>
+                <div>
+                  <span>Messages clients a traiter</span>
+                  <strong>
+                    {adminContactMessagesToRelance.length} message{adminContactMessagesToRelance.length > 1 ? "s" : ""} en attente de reponse
+                  </strong>
+                  <p>Cette alerte reste visible tant que le message n'est pas passe en traite dans l'onglet Messages.</p>
+                </div>
+                <ul>
+                  {adminContactMessagesToRelance.slice(0, 3).map((message) => (
+                    <li key={`admin-message-banner-${message.id}`}>
+                      <b>{message.full_name || "Client"}</b>
+                      <span>
+                        {message.subject || "Message"} - {formatCreatedAtDateTime(message.created_at)}
+                      </span>
+                    </li>
+                  ))}
+                  {adminContactMessagesToRelance.length > 3 && (
+                    <li>
+                      <b>Et {adminContactMessagesToRelance.length - 3} autre{adminContactMessagesToRelance.length - 3 > 1 ? "s" : ""}</b>
+                      <span>A consulter dans les messages</span>
+                    </li>
+                  )}
+                </ul>
+                <button type="button" onClick={() => setAdminView("contacts")}>
+                  Voir et relancer
+                </button>
+              </section>
+            )}
+
+            {newOccasionalSaleReservations.length > 0 && (
+              <section className="admin-payment-alert-banner admin-occasional-sale-alert-banner" aria-label="Nouvelles reservations de ventes ponctuelles">
+                <div className="admin-payment-alert-banner__icon">
+                  <BellRing size={30} />
+                </div>
+                <div>
+                  <span>Nouvelle vente ponctuelle</span>
+                  <strong>
+                    {newOccasionalSaleReservations.length} demande{newOccasionalSaleReservations.length > 1 ? "s" : ""} a traiter
+                  </strong>
+                  <p>Une reservation vient d'arriver. Cette alerte restera visible tant que son statut sera « Nouvelle ».</p>
+                </div>
+                <ul>
+                  {newOccasionalSaleReservations.slice(0, 3).map((reservation) => (
+                    <li key={`admin-occasional-sale-banner-${reservation.id}`}>
+                      <b>{reservation.client_name || "Client"}</b>
+                      <span>{reservation.quantity || 1} x {reservation.item_name || "Produit"}</span>
+                    </li>
+                  ))}
+                  {newOccasionalSaleReservations.length > 3 && (
+                    <li>
+                      <b>Et {newOccasionalSaleReservations.length - 3} autre{newOccasionalSaleReservations.length - 3 > 1 ? "s" : ""}</b>
+                      <span>A consulter dans les ventes ponctuelles</span>
+                    </li>
+                  )}
+                </ul>
+                <button type="button" onClick={() => setAdminView("occasionalSales")}>
+                  Voir les demandes
+                </button>
+              </section>
+            )}
+
+            {unsignedAdminKennelContractBookings.length > 0 && (
+              <section className="admin-payment-alert-banner admin-contract-alert-banner" aria-label="Contrats pension non signes">
+                <div className="admin-payment-alert-banner__icon">
+                  <ClipboardList size={30} />
+                </div>
+                <div>
+                  <span>Contrats pension a signer</span>
+                  <strong>
+                    {unsignedAdminKennelContractBookings.length} contrat{unsignedAdminKennelContractBookings.length > 1 ? "s" : ""} non signe{unsignedAdminKennelContractBookings.length > 1 ? "s" : ""}
+                  </strong>
+                  <p>Cette banniere reste visible tant qu'une reservation pension confirmee n'a pas son contrat signe.</p>
+                </div>
+                <ul>
+                  {unsignedAdminKennelContractBookings.slice(0, 3).map((booking) => (
+                    <li key={`admin-contract-banner-${booking.id}`}>
+                      <b>{booking.client_name || "Client"} - {booking.dog?.name || "Chien"}</b>
+                      <span>Du {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</span>
+                    </li>
+                  ))}
+                  {unsignedAdminKennelContractBookings.length > 3 && (
+                    <li>
+                      <b>Et {unsignedAdminKennelContractBookings.length - 3} autre{unsignedAdminKennelContractBookings.length - 3 > 1 ? "s" : ""}</b>
+                      <span>A consulter dans les reservations pension</span>
+                    </li>
+                  )}
+                </ul>
+                <button type="button" onClick={() => openKennelBookingFromPlanning(unsignedAdminKennelContractBookings[0])}>
+                  Voir la reservation
+                </button>
+              </section>
+            )}
+
             {kennelPaymentFollowups.length > 0 && (
               <section className="admin-payment-alert-banner" aria-label="Rappel paiements pension impayés">
                 <div className="admin-payment-alert-banner__icon">
@@ -13022,8 +14634,8 @@ function openTutorialFromPage(guideId) {
               <button type="button" onClick={() => setAdminView("kennel")}>
                 <Dog size={16} />
                 Pension
-                {pendingKennelRequestsCount > 0 && (
-                  <span>{pendingKennelRequestsCount}</span>
+                {kennelAdminAttentionCount > 0 && (
+                  <span>{kennelAdminAttentionCount}</span>
                 )}
               </button>
               <button type="button" onClick={() => setAdminView("education")}>
@@ -13050,8 +14662,8 @@ function openTutorialFromPage(guideId) {
               <button type="button" onClick={() => setAdminView("contacts")}>
                 <Mail size={16} />
                 Messages
-                {unhandledContactMessagesCount > 0 && (
-                  <span>{unhandledContactMessagesCount}</span>
+                {adminContactMessagesToRelance.length > 0 && (
+                  <span>{adminContactMessagesToRelance.length}</span>
                 )}
               </button>
             </nav>
@@ -13081,7 +14693,7 @@ function openTutorialFromPage(guideId) {
                   tabs: [
                     { value: "kennel", label: "Réservations" },
                     { value: "kennelDogs", label: "Fiches chiens" },
-                    { value: "kennelPhotos", label: "Photos pension" },
+                    { value: "kennelPhotos", label: "Médias pension" },
                   ],
                 },
                 {
@@ -13096,6 +14708,7 @@ function openTutorialFromPage(guideId) {
                   title: "Communication",
                   tabs: [
                     { value: "announcements", label: "Annonces" },
+                    { value: "homeVideo", label: "Video accueil" },
                     { value: "featuredEvent", label: "Événement à l'honneur" },
                     { value: "occasionalSales", label: "Ventes ponctuelles" },
                     { value: "news", label: "Actualités" },
@@ -13149,9 +14762,9 @@ function openTutorialFromPage(guideId) {
                             {pendingEducationRequestsCount}
                           </span>
                         )}
-                        {tab.value === "kennel" && pendingKennelRequestsCount > 0 && (
-                          <span className="admin-tab-badge admin-tab-badge--danger">
-                            {pendingKennelRequestsCount}
+                        {tab.value === "kennel" && kennelAdminAttentionCount > 0 && (
+                          <span className={`admin-tab-badge admin-tab-badge--${pendingKennelRequestsCount > 0 ? "danger" : "warning"}`}>
+                            {kennelAdminAttentionCount}
                           </span>
                         )}
                         {tab.value === "clients" && recentClientsCount > 0 && (
@@ -13159,9 +14772,14 @@ function openTutorialFromPage(guideId) {
                             {recentClientsCount}
                           </span>
                         )}
-                        {tab.value === "contacts" && unhandledContactMessagesCount > 0 && (
+                        {tab.value === "contacts" && adminContactMessagesToRelance.length > 0 && (
                           <span className="admin-tab-badge admin-tab-badge--danger">
-                            {unhandledContactMessagesCount}
+                            {adminContactMessagesToRelance.length}
+                          </span>
+                        )}
+                        {tab.value === "occasionalSales" && newOccasionalSaleReservations.length > 0 && (
+                          <span className="admin-tab-badge admin-tab-badge--danger">
+                            {newOccasionalSaleReservations.length}
                           </span>
                         )}
                         {tab.value === "payments" && kennelPaymentFollowups.length > 0 && (
@@ -13526,7 +15144,10 @@ function openTutorialFromPage(guideId) {
                   <div className="today-card__list">
                     {currentKennelGuests.map((booking) => (
                       <div key={`today-kennel-${booking.id}`} className="today-item">
-                        <strong>{booking.dog?.name || "Chien non renseigné"}</strong>
+                        <button type="button" className="planning-booking-link" onClick={() => openKennelBookingFromPlanning(booking)}>
+                          {booking.dog?.name || "Chien non renseigné"}
+                          <ChevronRight size={16} />
+                        </button>
                         <span>{booking.client_name} - départ {formatDeliveryDate(booking.end_date)}</span>
                         <em>{booking.phone || "Téléphone non renseigné"}</em>
                       </div>
@@ -13635,7 +15256,7 @@ function openTutorialFromPage(guideId) {
                   </span>
                 </div>
                 <button type="button" className="admin-card-action" onClick={() => setAdminView("kennelPhotos")}>
-                  Gérer les photos pension
+                  Gérer les médias pension
                 </button>
                 <ul>
                   {fullKennelNights.map((day) => (
@@ -13866,6 +15487,116 @@ function openTutorialFromPage(guideId) {
                 </div>
               </section>
 
+              <section className="admin-products-panel egg-revenue-forecast-panel" data-section="eggs">
+                <div className="admin-panel-title">
+                  <span><Euro size={24} /></span>
+                  <div>
+                    <h2>Chiffre d'affaires potentiel</h2>
+                    <p>Previsions et chiffre d'affaires realise {eggRevenueTrackingPeriodLabel}.</p>
+                  </div>
+                </div>
+
+                <div className="egg-revenue-forecast-summary">
+                  <article>
+                    <span>Production prevue</span>
+                    <strong>{eggRevenueForecastVolumeTotal.toLocaleString("fr-FR")}</strong>
+                    <em>oeufs jusqu'en decembre</em>
+                  </article>
+                  <article className="is-revenue">
+                    <span>Chiffre d'affaires potentiel</span>
+                    <strong>{eggRevenueForecastTotal.toFixed(2)} EUR</strong>
+                    <em>si toute la production est vendue</em>
+                  </article>
+                  <article>
+                    <span>Prix moyen utilise</span>
+                    <strong>{eggForecastUnitPrice.toFixed(3)} EUR</strong>
+                    <em>par oeuf</em>
+                  </article>
+                </div>
+
+                <form className="egg-revenue-forecast-form" onSubmit={saveEggRevenueForecast}>
+                  <label className="egg-revenue-forecast-price">
+                    <span>Prix moyen estime par oeuf</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      value={eggRevenueForecast.price_per_egg}
+                      onChange={(event) =>
+                        setEggRevenueForecast((forecast) => ({ ...forecast, price_per_egg: event.target.value }))
+                      }
+                      placeholder={suggestedEggUnitPrice ? suggestedEggUnitPrice.toFixed(3) : "0.000"}
+                    />
+                    <small>
+                      Laissez vide pour utiliser automatiquement la moyenne calculee depuis vos produits aux oeufs.
+                    </small>
+                  </label>
+
+                  <div className="egg-revenue-forecast-months">
+                    {eggRevenueForecastRows.map((month) => (
+                      <label key={month.monthKey}>
+                        <span>{month.label}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={eggRevenueForecast.months?.[month.monthKey] ?? ""}
+                          onChange={(event) => updateEggRevenueForecastMonth(month.monthKey, event.target.value)}
+                          placeholder="Nombre d'oeufs"
+                        />
+                        <strong>{month.potentialRevenue.toFixed(2)} EUR potentiel</strong>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="egg-revenue-forecast-actions">
+                    <p>Ce calcul est une estimation : volume produit x prix moyen par oeuf.</p>
+                    <button type="submit" className="primary-action">Enregistrer les previsions</button>
+                  </div>
+                </form>
+
+                <div className="egg-revenue-performance">
+                  <div className="egg-revenue-performance__header">
+                    <div>
+                      <h3>Prévisionnel / réellement réalisé</h3>
+                      <p>Le réalisé comprend uniquement les commandes d'œufs au statut Livrée.</p>
+                    </div>
+                    <div className="egg-revenue-performance__totals">
+                      <span>Objectif de la periode <strong>{eggRevenueForecastTotal.toFixed(2)} EUR</strong></span>
+                      <span>Réalisé <strong>{eggRevenueActualTotal.toFixed(2)} EUR</strong></span>
+                      <span className={eggRevenueVarianceTotal >= 0 ? "is-positive" : "is-negative"}>
+                        Écart <strong>{eggRevenueVarianceTotal >= 0 ? "+" : ""}{eggRevenueVarianceTotal.toFixed(2)} EUR</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="egg-revenue-performance__rows">
+                    {eggRevenueForecastRows.map((month) => {
+                      const isFutureMonth = month.monthKey > todayIso.slice(0, 7);
+                      const differenceTone = month.variance >= 0 ? "is-positive" : "is-negative";
+
+                      return (
+                        <article key={`egg-revenue-performance-${month.monthKey}`}>
+                          <strong>{month.label}</strong>
+                          <span>Prévu <b>{month.potentialRevenue.toFixed(2)} EUR</b></span>
+                          <span>Réalisé <b>{month.actualRevenue.toFixed(2)} EUR</b></span>
+                          <span className={isFutureMonth ? "is-future" : differenceTone}>
+                            {isFutureMonth ? "À venir" : `Écart ${month.variance >= 0 ? "+" : ""}${month.variance.toFixed(2)} EUR`}
+                          </span>
+                          <em>
+                            {isFutureMonth
+                              ? "Objectif planifié"
+                              : month.achievement === null
+                              ? "Aucun objectif saisi"
+                              : `${month.achievement}% de l'objectif atteint`}
+                          </em>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+
               <section className="admin-products-panel egg-production-panel" data-section="eggs">
                 <div className="admin-panel-title">
                   <span><Egg size={24} /></span>
@@ -13958,25 +15689,131 @@ function openTutorialFromPage(guideId) {
 
                   <div className="egg-ratio-calendar__summary">
                     <article>
+                      <span>Report précédent</span>
+                      <strong>{eggProductionCalendarOpeningBalance > 0 ? `+${eggProductionCalendarOpeningBalance}` : eggProductionCalendarOpeningBalance}</strong>
+                      <em>solde au début du mois</em>
+                    </article>
+                    <article>
                       <span>Production</span>
                       <strong>{eggProductionCalendarProduced}</strong>
-                      <em>oeufs depuis le 13/06</em>
+                      <em>oeufs - {eggProductionCalendarPeriodLabel}</em>
                     </article>
                     <article>
                       <span>Ventes</span>
                       <strong>{eggProductionCalendarSold}</strong>
-                      <em>oeufs depuis le 13/06</em>
+                      <em>oeufs échus - {eggProductionCalendarPeriodLabel}</em>
                     </article>
                     <article className={eggProductionCalendarBalance < 0 ? "is-alert" : ""}>
                       <span>Solde</span>
                       <strong>{eggProductionCalendarBalance > 0 ? `+${eggProductionCalendarBalance}` : eggProductionCalendarBalance}</strong>
-                      <em>oeufs depuis le 13/06</em>
+                      <em>oeufs - {eggProductionCalendarPeriodLabel}</em>
                     </article>
                     <article>
                       <span>Ratio</span>
                       <strong>{eggProductionCalendarRatio}%</strong>
-                      <em>vendu / produit</em>
+                      <em>vendu / pondu cumule</em>
                     </article>
+                  </div>
+
+                  <div className="egg-production-comparison">
+                    <div className="egg-production-comparison__header">
+                      <div>
+                        <h3>Évolution ponte / ventes</h3>
+                        <p>
+                          {eggProductionChartMode === "day"
+                            ? `Détail jour par jour sur ${getMonthLabel(eggProductionCalendarMonth)}.`
+                            : "Lecture mois par mois sur l'année en cours."}
+                        </p>
+                      </div>
+                      <div className="egg-production-comparison__controls">
+                        {eggProductionChartMode === "day" && (
+                          <div className="egg-production-comparison__month-nav">
+                            <button
+                              type="button"
+                              onClick={() => setEggProductionCalendarMonth(shiftMonth(eggProductionCalendarMonth, -1))}
+                              aria-label="Afficher le mois précédent"
+                            >
+                              &lt;
+                            </button>
+                            <strong>{getMonthLabel(eggProductionCalendarMonth)}</strong>
+                            <button
+                              type="button"
+                              onClick={() => setEggProductionCalendarMonth(shiftMonth(eggProductionCalendarMonth, 1))}
+                              aria-label="Afficher le mois suivant"
+                            >
+                              &gt;
+                            </button>
+                          </div>
+                        )}
+                        <div className="egg-production-comparison__tabs" aria-label="Vue du graphique ponte et ventes">
+                        <button
+                          type="button"
+                          className={eggProductionChartMode === "day" ? "is-active" : ""}
+                          onClick={() => setEggProductionChartMode("day")}
+                        >
+                          Jour par jour
+                        </button>
+                        <button
+                          type="button"
+                          className={eggProductionChartMode === "month" ? "is-active" : ""}
+                          onClick={() => setEggProductionChartMode("month")}
+                        >
+                          Mois par mois
+                        </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="egg-production-comparison__totals">
+                      <span><b>{eggProductionChartProducedTotal}</b> pondus</span>
+                      <span><b>{eggProductionChartSoldTotal}</b> vendus</span>
+                      <span className={eggProductionChartBalance < 0 ? "is-alert" : "is-ok"}>
+                        <b>{eggProductionChartBalance > 0 ? `+${eggProductionChartBalance}` : eggProductionChartBalance}</b>{" "}
+                        {eggProductionChartMode === "month" ? "solde cumule" : "solde"}
+                      </span>
+                      <span>
+                        <b>{eggProductionChartRatio}%</b>{" "}
+                        {eggProductionChartMode === "month" ? "ratio cumule" : "ratio"}
+                      </span>
+                    </div>
+
+                    {eggProductionComparisonData.length > 0 ? (
+                      <div
+                        className={`egg-production-comparison__chart ${eggProductionChartMode === "month" ? "is-month" : "is-day"}`}
+                        style={{ "--chart-count": eggProductionComparisonData.length }}
+                      >
+                        {eggProductionComparisonData.map((item) => {
+                          const producedHeight = Math.max(4, Math.round((Number(item.produced || 0) / eggProductionChartMax) * 100));
+                          const soldHeight = Math.max(4, Math.round((Number(item.sold || 0) / eggProductionChartMax) * 100));
+
+                          return (
+                            <div key={item.key} className={`egg-production-comparison__bar-group ${item.isFuture ? "is-future" : ""}`} title={`${item.title} - ponte ${item.produced}, ${item.isFuture ? "ventes prévues" : "ventes"} ${item.sold}`}>
+                              <div className="egg-production-comparison__bars">
+                                <i className="is-produced" style={{ height: `${producedHeight}%` }}>
+                                  <span>{item.produced}</span>
+                                </i>
+                                <i className="is-sold" style={{ height: `${soldHeight}%` }}>
+                                  <span>{item.sold}</span>
+                                </i>
+                              </div>
+                              <strong>{item.label}</strong>
+                              {eggProductionChartMode === "month" && (
+                                <em>
+                                  {item.cumulativeBalance > 0 ? `+${item.cumulativeBalance}` : item.cumulativeBalance}
+                                </em>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="egg-production-comparison__empty">Aucune donnée à afficher pour le moment.</p>
+                    )}
+
+                    <div className="egg-production-comparison__legend">
+                      <span><i className="is-produced" /> Ponte</span>
+                      <span><i className="is-sold" /> Ventes</span>
+                    </div>
                   </div>
 
                   <div className="egg-ratio-calendar__legend">
@@ -13989,9 +15826,9 @@ function openTutorialFromPage(guideId) {
                     {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((dayName) => (
                       <span key={dayName} className="egg-ratio-calendar__weekday">{dayName}</span>
                     ))}
-                    {eggProductionCalendarDays.map((day) => {
+                    {eggProductionCalendarDisplayDays.map((day) => {
                       const ratioClass =
-                        !day.countsForRatio
+                          !day.countsForRatio
                           ? ""
                           : day.sold > day.produced
                           ? "is-alert"
@@ -14008,33 +15845,16 @@ function openTutorialFromPage(guideId) {
                         >
                           <strong>{day.dayNumber}</strong>
                           <span>Produit : {day.produced}</span>
-                          <span>Vendu : {day.sold}</span>
-                          {!day.countsForRatio && day.inMonth ? (
-                            <em>hors calcul</em>
+                           <span>{day.isFuture ? "Prévu" : "Vendu"} : {day.sold}</span>
+                           {!day.countsForRatio && day.inMonth ? (
+                             <em>{day.isFuture ? "à venir" : "hors calcul"}</em>
                           ) : (day.produced > 0 || day.sold > 0) && (
-                            <em>{day.balance >= 0 ? `+${day.balance}` : day.balance} oeufs</em>
+                             <em>Solde : {day.runningBalance >= 0 ? `+${day.runningBalance}` : day.runningBalance} oeufs</em>
                           )}
                         </article>
                       );
                     })}
                   </div>
-                </div>
-
-                <div className="egg-production-chart" aria-label="Evolution de la ponte sur les 30 derniers jours">
-                  {eggProductionLast30Days.length > 0 ? (
-                    eggProductionLast30Days.map((log) => {
-                      const maxEggs = Math.max(...eggProductionLast30Days.map((item) => Number(item.eggs_collected || 0)), 1);
-                      const height = Math.max(12, Math.round((Number(log.eggs_collected || 0) / maxEggs) * 100));
-
-                      return (
-                        <span key={log.id || log.log_date} title={`${formatDeliveryDate(log.log_date)} : ${log.eggs_collected} oeufs`}>
-                          <i style={{ height: `${height}%` }} />
-                        </span>
-                      );
-                    })
-                  ) : (
-                    <p>Aucune saisie de ponte pour le moment.</p>
-                  )}
                 </div>
 
                 <div className="egg-production-bottom">
@@ -14160,18 +15980,41 @@ function openTutorialFromPage(guideId) {
                     onChange={(e) => setProductForm({ ...productForm, unit_label: e.target.value })}
                     placeholder="Unité : boite, kg, botte..."
                   />
-                  <input
-                    type="number"
-                    min="0"
-                    value={productForm.size_eggs}
-                    onChange={(e) => setProductForm({ ...productForm, size_eggs: Number(e.target.value) })}
-                    placeholder="Œufs par unité, laisser 0 pour légumes"
-                  />
-                  <input
-                    value={productForm.image}
-                    onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
-                    placeholder="Image URL, optionnel"
-                  />
+                  {isEggProduct({ name: productForm.name }) && (
+                    <input
+                      type="number"
+                      min="0"
+                      value={productForm.size_eggs}
+                      onChange={(e) => setProductForm({ ...productForm, size_eggs: Number(e.target.value) })}
+                      placeholder="Œufs par unité"
+                    />
+                  )}
+                  <label className="admin-product-stock-field">
+                    <span>Stock disponible</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={productForm.stock_quantity}
+                      onChange={(e) => setProductForm({ ...productForm, stock_quantity: e.target.value })}
+                      placeholder="Quantité disponible (0 si épuisé)"
+                    />
+                  </label>
+                  <label className="admin-photo-field">
+                    <span>Photo du produit</span>
+                    <input
+                      value={productForm.image}
+                      onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
+                      placeholder="Image URL, optionnel"
+                    />
+                    <PhotoQuickPicker
+                      imageOptions={imageOptions}
+                      onPick={(imageUrl) => setProductForm({ ...productForm, image: imageUrl })}
+                    />
+                    {productForm.image && (
+                      <img src={normalizeImageUrl(productForm.image)} alt="Aperçu produit" />
+                    )}
+                  </label>
                   <button type="submit" className="primary-action">
                     {productForm.id ? "Mettre à jour" : "Ajouter"}
                   </button>
@@ -14189,9 +16032,29 @@ function openTutorialFromPage(guideId) {
                 <div className="admin-products-list">
                   {products.map((product) => (
                     <article key={product.id}>
+                      {product.image ? (
+                        <img className="admin-products-list__image" src={normalizeImageUrl(product.image)} alt={product.name} />
+                      ) : (
+                        <span className="admin-products-list__image admin-products-list__image--empty">
+                          <ImageIcon size={20} />
+                        </span>
+                      )}
                       <div>
                         <strong>{product.name}</strong>
                         <span>{product.price.toFixed(2)} EUR / {product.unit_label}</span>
+                        {!isEggProduct(product) ? (
+                          <div className="admin-product-stock-control">
+                            <button type="button" onClick={() => adjustProductStock(product, -1)} aria-label={`Retirer une unite de ${product.name}`}>
+                              <Minus size={15} />
+                            </button>
+                            <strong>{Number(product.stock_quantity || 0)} disponible{Number(product.stock_quantity || 0) > 1 ? "s" : ""}</strong>
+                            <button type="button" onClick={() => adjustProductStock(product, 1)} aria-label={`Ajouter une unite de ${product.name}`}>
+                              <Plus size={15} />
+                            </button>
+                          </div>
+                        ) : (
+                          <em className="admin-product-stock-untracked">Stock calculé selon le nombre d'œufs disponibles</em>
+                        )}
                       </div>
                       <div>
                         <button type="button" onClick={() => editProduct(product)}>
@@ -14255,13 +16118,30 @@ function openTutorialFromPage(guideId) {
                         <div className="delivery-products">
                           <div className="delivery-products__header">
                             <h3>Produits à préparer</h3>
-                            <button type="button" onClick={() => openDeliveryRouteMap(selectedPlanningDay.date)}>
-                              <MapPin size={16} />
-                              Tournée Google Maps
-                            </button>
+                            <div className="delivery-route-actions">
+                              {selectedDeliveryRouteBatches.length <= 1 ? (
+                                <button type="button" onClick={() => openDeliveryRouteMap(selectedPlanningDay.date)}>
+                                  <MapPin size={16} />
+                                  Tournée Google Maps
+                                </button>
+                              ) : (
+                                selectedDeliveryRouteBatches.map((batch, batchIndex) => (
+                                  <button
+                                    key={`route-batch-${selectedPlanningDay.date}-${batchIndex}`}
+                                    type="button"
+                                    onClick={() => openDeliveryRouteMap(selectedPlanningDay.date, batchIndex)}
+                                  >
+                                    <MapPin size={16} />
+                                    Partie {batchIndex + 1} · adresses {batch.startNumber} à {batch.endNumber}
+                                  </button>
+                                ))
+                              )}
+                            </div>
                           </div>
                           <p className="delivery-route-hint">
-                            L'ordre ci-dessous est trié par zone, ville, rue puis numéro. Le bouton Google Maps reprend ce même ordre.
+                            {selectedDeliveryRouteBatches.length > 1
+                              ? `Google Maps limite chaque itinéraire à 10 adresses : ouvrez successivement les ${selectedDeliveryRouteBatches.length} parties. Elles sont reliées dans le même ordre.`
+                              : "L'ordre ci-dessous est trié par zone, ville, rue puis numéro. Le bouton Google Maps reprend ce même ordre."}
                           </p>
                           <div>
                             {selectedPlanningDay.products.map((product) => (
@@ -14376,6 +16256,21 @@ function openTutorialFromPage(guideId) {
                   >
                     Aujourd'hui
                   </button>
+                </div>
+
+                <div className="client-version-overview" aria-label="État des versions clientes">
+                  <article className="is-current">
+                    <span>À jour</span>
+                    <strong>{clientVersionSummary.current}</strong>
+                  </article>
+                  <article className="is-outdated">
+                    <span>Mise à jour nécessaire</span>
+                    <strong>{clientVersionSummary.outdated}</strong>
+                  </article>
+                  <article className="is-unknown">
+                    <span>Jamais vérifié</span>
+                    <strong>{clientVersionSummary.unknown}</strong>
+                  </article>
                 </div>
 
                 <div className="admin-table-wrap">
@@ -14791,22 +16686,53 @@ function openTutorialFromPage(guideId) {
                           <MessageSquareText size={17} /> Démarrer une conversation
                         </button>
                       </div>
-                      <div className="contact-thread-list is-compact">
-                        {selectedClientMessages.slice(0, 4).map((message) => (
+                      <div className="contact-thread-list client-conversation-history">
+                        {selectedClientMessages
+                          .slice()
+                          .sort((first, second) => new Date(second.updated_at || second.created_at) - new Date(first.updated_at || first.created_at))
+                          .map((message) => {
+                            const replies = getContactMessageReplies(message.id);
+
+                            return (
                           <article key={`client-thread-${message.id}`} className="contact-thread-card">
                             <div className="contact-thread-card__header">
                               <div>
                                 <strong>{message.subject || "Message client"}</strong>
                                 <span>{formatCreatedAtDateTime(message.created_at)} - {message.status || "Nouveau"}</span>
                               </div>
-                              <button type="button" onClick={() => setAdminView("contacts")}>
-                                Ouvrir
-                              </button>
+                              <button type="button" onClick={() => setAdminView("contacts")}>Voir dans Messages</button>
                             </div>
-                            <p>{message.message}</p>
-                            <em>{getContactMessageReplies(message.id).length} réponse{getContactMessageReplies(message.id).length > 1 ? "s" : ""}</em>
+                            <div className="contact-thread">
+                              <article className="contact-thread__bubble contact-thread__bubble--client">
+                                <span>{message.full_name || "Client"} - {formatCreatedAtDateTime(message.created_at)}</span>
+                                <p>{message.message}</p>
+                              </article>
+                              {replies.map((reply) => (
+                                <article
+                                  key={reply.id}
+                                  className={`contact-thread__bubble ${reply.sender_role === "admin" ? "contact-thread__bubble--admin" : "contact-thread__bubble--client"}`}
+                                >
+                                  <span>{reply.sender_role === "admin" ? "Vous" : reply.sender_name || "Client"} - {formatCreatedAtDateTime(reply.created_at)}</span>
+                                  <p>{reply.message}</p>
+                                </article>
+                              ))}
+                            </div>
+                            <div className="contact-reply-box">
+                              <textarea
+                                value={contactReplyDrafts[message.id] || ""}
+                                onChange={(e) => updateContactReplyDraft(message.id, e.target.value)}
+                                placeholder="Écrire une réponse visible par le client..."
+                                rows="3"
+                              />
+                              <div>
+                                <button type="button" className="admin-tool-link" onClick={() => submitContactReply(message, "admin")}>
+                                  Répondre dans l'application
+                                </button>
+                              </div>
+                            </div>
                           </article>
-                        ))}
+                            );
+                          })}
                         {selectedClientMessages.length === 0 && (
                           <p className="client-timeline__empty">Aucun message pour ce client.</p>
                         )}
@@ -14920,6 +16846,7 @@ function openTutorialFromPage(guideId) {
                         <th>Téléphone</th>
                         <th>Adresse</th>
                         <th>Notifications</th>
+                        <th>Version appli</th>
                         <th>Accès œufs</th>
                       </tr>
                     </thead>
@@ -14927,6 +16854,7 @@ function openTutorialFromPage(guideId) {
                     <tbody>
                       {filteredCustomerProfiles.map((profile) => {
                         const pushSummary = getClientPushSummary(profile.id);
+                        const versionStatus = getClientAppVersionStatus(profile.id);
 
                         return (
                           <tr key={profile.id}>
@@ -14984,6 +16912,21 @@ function openTutorialFromPage(guideId) {
                                 </span>
                               )}
                             </td>
+                            <td data-label="Version appli">
+                              {profile.is_admin ? (
+                                <span className="client-version-status is-unknown">Compte admin</span>
+                              ) : (
+                                <span className={`client-version-status is-${versionStatus.tone}`}>
+                                  <strong>{versionStatus.label}</strong>
+                                  {versionStatus.version?.build_commit && (
+                                    <em>Version {String(versionStatus.version.build_commit).slice(0, 7)}</em>
+                                  )}
+                                  {versionStatus.version?.last_seen_at && (
+                                    <small>Vu le {formatCreatedAtDateTime(versionStatus.version.last_seen_at)}</small>
+                                  )}
+                                </span>
+                              )}
+                            </td>
                             <td data-label="Accès œufs">
                               {profile.is_admin ? (
                                 <strong>Autorisé</strong>
@@ -15003,7 +16946,7 @@ function openTutorialFromPage(guideId) {
 
                       {filteredCustomerProfiles.length === 0 && (
                         <tr>
-                          <td colSpan="6" className="admin-empty">
+                          <td colSpan="7" className="admin-empty">
                             {customerProfiles.length === 0
                               ? "Aucun compte client pour le moment."
                               : clientQuickFilter === "missing-contact"
@@ -15588,7 +17531,7 @@ function openTutorialFromPage(guideId) {
                     <h2>Centre des automatismes</h2>
                     <p>Contrôlez les emails et rappels programmés, puis relancez-les immédiatement si nécessaire.</p>
                   </div>
-                  <button type="button" onClick={loadAutomationRuns}>
+                  <button type="button" onClick={() => Promise.all([loadAutomationRuns(), loadAutomationSettings()])}>
                     <RefreshCw size={18} /> Actualiser
                   </button>
                 </div>
@@ -15605,6 +17548,15 @@ function openTutorialFromPage(guideId) {
                             <h3>{automation.title}</h3>
                             <p>{automation.description}</p>
                           </div>
+                          <label className="automation-toggle">
+                            <input
+                              type="checkbox"
+                              checked={automation.enabled}
+                              onChange={() => toggleAutomationSetting(automation.key)}
+                              disabled={Boolean(automationSettingsSavingKey)}
+                            />
+                            <span>{automation.enabled ? "Actif" : "En pause"}</span>
+                          </label>
                         </div>
                         <div className="automation-status-card__facts">
                           <span>
@@ -15622,12 +17574,13 @@ function openTutorialFromPage(guideId) {
                             <strong>{Number(run?.processed_count || 0)}</strong>
                           </span>
                         </div>
-                        {automation.isStale && <p className="automation-status-card__alert">Aucun passage enregistré depuis plus de 36 heures.</p>}
+                        {!automation.enabled && <p className="automation-status-card__paused">Aucun envoi automatique ne sera effectué tant que cet automatisme reste en pause.</p>}
+                        {automation.enabled && automation.isStale && <p className="automation-status-card__alert">Aucun passage enregistré depuis plus de 36 heures.</p>}
                         {run?.error_message && <p className="automation-status-card__alert">{run.error_message}</p>}
                         <button
                           type="button"
                           onClick={() => runAdminAutomation(automation.key)}
-                          disabled={Boolean(automationRunningKey)}
+                          disabled={Boolean(automationRunningKey) || !automation.enabled}
                         >
                           <RefreshCw size={17} className={isRunning ? "is-spinning" : ""} />
                           {isRunning ? "Relance en cours..." : "Relancer maintenant"}
@@ -15668,6 +17621,109 @@ function openTutorialFromPage(guideId) {
                 </div>
               </section>
 
+              <section className="admin-products-panel home-video-admin-panel" data-section="homeVideo">
+                <div className="admin-panel-title admin-panel-title--row">
+                  <span><Video size={24} /></span>
+                  <div>
+                    <h2>Video mise en avant sur l'accueil</h2>
+                    <p>Publiez une video de la pension, de la ferme ou d'un evenement, puis remplacez-la quand vous le souhaitez.</p>
+                  </div>
+                </div>
+
+                <form className="home-video-admin-form" onSubmit={saveHomeVideo}>
+                  <label className="admin-payment-check home-video-admin-form__wide">
+                    <input
+                      type="checkbox"
+                      checked={homeVideoForm.enabled === true}
+                      onChange={(event) => setHomeVideoForm({ ...homeVideoForm, enabled: event.target.checked })}
+                    />
+                    <span>Afficher la video sur la page d'accueil</span>
+                  </label>
+
+                  <div className="admin-media-upload home-video-upload home-video-admin-form__wide">
+                    <div>
+                      <strong>Choisir une video</strong>
+                      <p>Formats conseilles : MP4 ou WebM. Taille maximale : 80 Mo.</p>
+                      {homeVideoUploadStatus.message && <em>{homeVideoUploadStatus.message}</em>}
+                    </div>
+                    <label>
+                      <Video size={18} />
+                      <span>{homeVideoUploadStatus.uploading ? "Envoi en cours..." : "Choisir une video"}</span>
+                      <input
+                        type="file"
+                        accept="video/mp4,video/webm,video/quicktime"
+                        onChange={uploadHomeVideo}
+                        disabled={homeVideoUploadStatus.uploading}
+                      />
+                    </label>
+                  </div>
+
+                  <label className="home-video-admin-form__wide">
+                    <span>Lien direct de la video</span>
+                    <input
+                      value={homeVideoForm.video_url}
+                      onChange={(event) => setHomeVideoForm({ ...homeVideoForm, video_url: event.target.value })}
+                      placeholder="Lien MP4 ou WebM"
+                    />
+                  </label>
+                  <label>
+                    <span>Petit titre</span>
+                    <input
+                      value={homeVideoForm.eyebrow}
+                      onChange={(event) => setHomeVideoForm({ ...homeVideoForm, eyebrow: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Titre principal</span>
+                    <input
+                      value={homeVideoForm.title}
+                      onChange={(event) => setHomeVideoForm({ ...homeVideoForm, title: event.target.value })}
+                    />
+                  </label>
+                  <label className="home-video-admin-form__wide">
+                    <span>Texte d'accompagnement</span>
+                    <textarea
+                      value={homeVideoForm.text}
+                      onChange={(event) => setHomeVideoForm({ ...homeVideoForm, text: event.target.value })}
+                      rows="4"
+                    />
+                  </label>
+                  <label className="home-video-admin-form__wide">
+                    <span>Image d'aperçu avant lecture</span>
+                    <input
+                      value={homeVideoForm.poster_url}
+                      onChange={(event) => setHomeVideoForm({ ...homeVideoForm, poster_url: event.target.value })}
+                      placeholder="Photo de couverture"
+                    />
+                    <PhotoQuickPicker
+                      imageOptions={imageOptions}
+                      onPick={(imageUrl) => setHomeVideoForm({ ...homeVideoForm, poster_url: imageUrl })}
+                    />
+                  </label>
+                  <label className="admin-payment-check home-video-admin-form__wide">
+                    <input
+                      type="checkbox"
+                      checked={homeVideoForm.autoplay === true}
+                      onChange={(event) => setHomeVideoForm({ ...homeVideoForm, autoplay: event.target.checked })}
+                    />
+                    <span>Demarrer automatiquement sans le son</span>
+                  </label>
+
+                  {homeVideoForm.video_url && (
+                    <div className="home-video-admin-preview home-video-admin-form__wide">
+                      <video src={homeVideoForm.video_url} poster={homeVideoForm.poster_url || undefined} controls playsInline preload="metadata" />
+                    </div>
+                  )}
+
+                  <div className="about-admin-actions home-video-admin-form__wide">
+                    <button type="submit" className="primary-action">Enregistrer la video d'accueil</button>
+                    <button type="button" className="secondary-action" onClick={() => setHomeVideoForm(homeVideo)}>
+                      Annuler les modifications
+                    </button>
+                  </div>
+                </form>
+              </section>
+
               <section className="admin-products-panel admin-media-panel" data-section="media">
                 <div className="admin-panel-title admin-panel-title--row">
                   <span><ImageIcon size={24} /></span>
@@ -15690,6 +17746,24 @@ function openTutorialFromPage(guideId) {
                     <span>{imageOptions.length} photo(s)</span>
                     <span>{unusedMediaImagesCount} non utilisée(s)</span>
                   </div>
+                </div>
+
+                <div className="admin-media-upload">
+                  <div>
+                    <strong>Ajouter une photo</strong>
+                    <p>Choisissez une photo depuis votre ordinateur ou votre téléphone. Elle sera ajoutée automatiquement à la bibliothèque.</p>
+                    {mediaUploadStatus.message && <em>{mediaUploadStatus.message}</em>}
+                  </div>
+                  <label>
+                    <ImageIcon size={18} />
+                    <span>{mediaUploadStatus.uploading ? "Envoi en cours..." : "Choisir une photo"}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                      onChange={uploadPhotoToMediaLibrary}
+                      disabled={mediaUploadStatus.uploading}
+                    />
+                  </label>
                 </div>
 
                 {missingLibraryImages.length > 0 && (
@@ -16228,21 +18302,31 @@ function openTutorialFromPage(guideId) {
                 <div className="admin-products-list">
                   {educationDateSlots.map((slot) => {
                     const activity = educationActivities.find((item) => item.id === slot.activity_id);
+                    const slotBookings = getEducationSlotBookings(slot);
                     const participants = getEducationSlotParticipants(slot);
                     const remaining = getEducationSlotRemaining(slot);
+                    const isSelected = String(selectedEducationSlotId) === String(slot.id);
 
                     return (
-                      <article key={slot.id}>
-                        <div>
-                          <strong>{activity?.name || "Activité supprimée"} - {formatDeliveryDate(slot.activity_date)}</strong>
+                      <article key={slot.id} className={`education-slot-card${isSelected ? " is-expanded" : ""}`}>
+                        <button
+                          type="button"
+                          className="education-slot-summary"
+                          onClick={() => setSelectedEducationSlotId(isSelected ? "" : slot.id)}
+                          aria-expanded={isSelected}
+                        >
                           <span>
-                            {slot.label ? `${slot.label} - ` : ""}
-                            {participants}/{slot.capacity} place{Number(slot.capacity) > 1 ? "s" : ""}
-                            {remaining <= 0 ? " - complet" : ` - ${remaining} restante${remaining > 1 ? "s" : ""}`}
-                            {!slot.active ? " - masquée" : ""}
+                            <strong>{activity?.name || "Activité supprimée"} - {formatDeliveryDate(slot.activity_date)}</strong>
+                            <small>
+                              {slot.label ? `${slot.label} - ` : ""}
+                              {participants}/{slot.capacity} place{Number(slot.capacity) > 1 ? "s" : ""}
+                              {remaining <= 0 ? " - complet" : ` - ${remaining} restante${remaining > 1 ? "s" : ""}`}
+                              {!slot.active ? " - masquée" : ""}
+                            </small>
                           </span>
-                        </div>
-                        <div>
+                          <ChevronRight size={19} className={isSelected ? "is-open" : ""} />
+                        </button>
+                        <div className="education-slot-actions">
                           <button type="button" onClick={() => editEducationDateSlot(slot)}>
                             Modifier
                           </button>
@@ -16253,6 +18337,39 @@ function openTutorialFromPage(guideId) {
                             Supprimer
                           </button>
                         </div>
+                        {isSelected && (
+                          <div className="education-slot-participants">
+                            <div className="education-slot-participants__header">
+                              <div>
+                                <strong>Participants inscrits</strong>
+                                <span>{slotBookings.length} réservation{slotBookings.length > 1 ? "s" : ""} - {participants} participant{participants > 1 ? "s" : ""}</span>
+                              </div>
+                              <UsersRound size={22} />
+                            </div>
+                            <div className="education-slot-participants__list">
+                              {slotBookings.map((booking) => (
+                                <div key={`slot-participant-${booking.id}`} className="education-slot-participant-row">
+                                  <div>
+                                    <strong>{booking.client_name || "Client non renseigné"}</strong>
+                                    <span>{Number(booking.participants || 0)} participant{Number(booking.participants || 0) > 1 ? "s" : ""} - {booking.status || "Demandée"}</span>
+                                    {booking.accompanist_name && <span>Accompagnateur : {booking.accompanist_name}</span>}
+                                    {Array.isArray(booking.children) && booking.children.length > 0 && (
+                                      <span>
+                                        Enfants : {booking.children.map((child) => `${child.firstName || child.first_name || "Prénom"} (${child.age || "?"} ans)`).join(", ")}
+                                      </span>
+                                    )}
+                                    {booking.notes && <em>{booking.notes}</em>}
+                                  </div>
+                                  <div className="education-slot-participant-row__contact">
+                                    {booking.phone && <a href={`tel:${booking.phone}`}><Smartphone size={15} /> {booking.phone}</a>}
+                                    {booking.client_email && <a href={`mailto:${booking.client_email}`}><Mail size={15} /> {booking.client_email}</a>}
+                                  </div>
+                                </div>
+                              ))}
+                              {slotBookings.length === 0 && <p>Aucun participant inscrit pour le moment.</p>}
+                            </div>
+                          </div>
+                        )}
                       </article>
                     );
                   })}
@@ -16310,6 +18427,35 @@ function openTutorialFromPage(guideId) {
                         {booking.notes && <em>{booking.notes}</em>}
                       </div>
                       <div className="admin-reservation-controls">
+                        <button
+                          type="button"
+                          className="reservation-date-edit-button"
+                          onClick={() => openReservationDateEditorFor(booking, "education")}
+                        >
+                          <CalendarDays size={16} /> Modifier la date
+                        </button>
+                        {reservationDateEditor.key === `education-${booking.id}` && (
+                          <div className="reservation-date-editor">
+                            <label>
+                              <span>Nouvelle date</span>
+                              <input
+                                type="date"
+                                value={reservationDateEditor.booking_date}
+                                onChange={(event) =>
+                                  setReservationDateEditor((editor) => ({ ...editor, booking_date: event.target.value }))
+                                }
+                              />
+                            </label>
+                            <div>
+                              <button type="button" className="primary-action" onClick={() => saveReservationDateChanges(booking, "education")}>
+                                Enregistrer la date
+                              </button>
+                              <button type="button" onClick={() => openReservationDateEditorFor(booking, "education")}>
+                                Fermer
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <span className="admin-status-pill">{booking.status || "Demandée"}</span>
                         <label className="admin-amount-field">
                           <span>Montant confirmé</span>
@@ -16372,7 +18518,11 @@ function openTutorialFromPage(guideId) {
                         </select>
                         <select
                           value={booking.status || "Demandée"}
-                          onChange={(e) => updateEducationBooking(booking.id, { status: e.target.value })}
+                          onChange={(e) =>
+                            String(e.target.value).startsWith("Annul")
+                              ? cancelAdminReservation(booking, "education")
+                              : updateEducationBooking(booking.id, { status: e.target.value })
+                          }
                         >
                           {reservationStatusOptions.map((status) => (
                             <option key={status} value={status}>{status}</option>
@@ -16381,6 +18531,47 @@ function openTutorialFromPage(guideId) {
                         <button type="button" onClick={() => setEducationBookingArchived(booking, !booking.archived_at)}>
                           {booking.archived_at ? "Restaurer" : "Archiver"}
                         </button>
+                        <button
+                          type="button"
+                          className="reservation-cancel-button"
+                          disabled={String(booking.status || "").startsWith("Annul")}
+                          onClick={() => cancelAdminReservation(booking, "education")}
+                        >
+                          {String(booking.status || "").startsWith("Annul") ? "Reservation annulee" : "Annuler la reservation"}
+                        </button>
+                        {booking.user_id && !String(booking.client_email || "").includes("@les-poulettes.local") && (
+                          <>
+                        <button
+                          type="button"
+                          className="admin-tool-button booking-message-toggle"
+                          onClick={() =>
+                            setOpenBookingMessageComposer((current) =>
+                              current === getBookingConversationKey("education", booking.id)
+                                ? ""
+                                : getBookingConversationKey("education", booking.id)
+                            )
+                          }
+                        >
+                          <MessageSquareText size={16} /> Ecrire dans l'application
+                        </button>
+                        {openBookingMessageComposer === getBookingConversationKey("education", booking.id) && (
+                          <div className="booking-message-composer">
+                            <textarea
+                              value={bookingMessageDrafts[getBookingConversationKey("education", booking.id)] || ""}
+                              onChange={(e) => updateBookingMessageDraft("education", booking.id, e.target.value)}
+                              placeholder="Votre message au client..."
+                              rows="3"
+                            />
+                            <div>
+                              <span>Le client le recevra dans son espace Messages.</span>
+                              <button type="button" className="primary-action" onClick={() => sendBookingMessage(booking, "education")}>
+                                Envoyer le message
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                          </>
+                        )}
                         <AdminPreparedMessageActions
                           scope="education"
                           item={booking}
@@ -16409,16 +18600,71 @@ function openTutorialFromPage(guideId) {
 
               <section className="admin-products-panel kennel-admin-photos-panel" data-section="kennelPhotos">
                 <div className="admin-panel-title">
-                  <span><Dog size={24} /></span>
+                  <span><Video size={24} /></span>
                   <div>
-                    <h2>Photos de la pension canine</h2>
-                    <p>Collez ici les liens des photos qui apparaissent sur la page client Pension canine.</p>
+                    <h2>Médias de la pension canine</h2>
+                    <p>Choisissez la vidéo d'en-tête et les photos visibles sur la page client Pension canine.</p>
                   </div>
                 </div>
 
                 <form className="admin-product-form" onSubmit={saveKennelContent}>
+                  <div className="kennel-video-settings">
+                    <label className="admin-payment-check">
+                      <input
+                        type="checkbox"
+                        checked={kennelContentForm.video_enabled === true}
+                        onChange={(event) => setKennelContentForm({
+                          ...kennelContentForm,
+                          video_enabled: event.target.checked,
+                        })}
+                      />
+                      <span>Afficher la vidéo en fond en haut de la page pension</span>
+                    </label>
+
+                    <div className="admin-media-upload home-video-upload">
+                      <div>
+                        <strong>Choisir une vidéo</strong>
+                        <p>MP4 ou WebM conseillé. La vidéo sera silencieuse et tournera en boucle.</p>
+                        {kennelVideoUploadStatus.message && <em>{kennelVideoUploadStatus.message}</em>}
+                      </div>
+                      <label>
+                        <Video size={18} />
+                        <span>{kennelVideoUploadStatus.uploading ? "Envoi en cours..." : "Choisir une vidéo"}</span>
+                        <input
+                          type="file"
+                          accept="video/mp4,video/webm,video/quicktime"
+                          onChange={uploadKennelVideo}
+                          disabled={kennelVideoUploadStatus.uploading}
+                        />
+                      </label>
+                    </div>
+
+                    <label className="kennel-video-link">
+                      <span>Lien direct de la vidéo</span>
+                      <input
+                        value={kennelContentForm.video_url}
+                        onChange={(event) => setKennelContentForm({
+                          ...kennelContentForm,
+                          video_url: event.target.value,
+                        })}
+                        placeholder="Lien MP4 ou WebM"
+                      />
+                    </label>
+
+                    {kennelContentForm.video_url && (
+                      <div className="home-video-admin-preview">
+                        <video
+                          src={kennelContentForm.video_url}
+                          poster={kennelContentForm.image_url || DEFAULT_KENNEL_CONTENT.image_url}
+                          controls
+                          playsInline
+                          preload="metadata"
+                        />
+                      </div>
+                    )}
+                  </div>
                   <label className="admin-photo-field">
-                    <span>Photo principale</span>
+                    <span>Photo principale et image de secours de la vidéo</span>
                     <input
                       value={kennelContentForm.image_url}
                       onChange={(e) => setKennelContentForm({ ...kennelContentForm, image_url: e.target.value })}
@@ -16461,7 +18707,7 @@ function openTutorialFromPage(guideId) {
                     )}
                   </label>
                   <button type="submit" className="primary-action">
-                    Enregistrer les photos
+                    Enregistrer les médias
                   </button>
                   <button
                     type="button"
@@ -16497,7 +18743,10 @@ function openTutorialFromPage(guideId) {
                           <div className="kennel-ops-item__head">
                             <DogAvatar dog={booking.dog} size="small" />
                             <div>
-                              <strong>{booking.dog?.name || "Chien non renseigné"}</strong>
+                              <button type="button" className="planning-booking-link" onClick={() => openKennelBookingFromPlanning(booking)}>
+                                {booking.dog?.name || "Chien non renseigné"}
+                                <ChevronRight size={16} />
+                              </button>
                               <span>{booking.client_name}</span>
                             </div>
                           </div>
@@ -16538,7 +18787,10 @@ function openTutorialFromPage(guideId) {
                           <div className="kennel-ops-item__head">
                             <DogAvatar dog={booking.dog} size="small" />
                             <div>
-                              <strong>{booking.dog?.name || "Chien non renseigné"}</strong>
+                              <button type="button" className="planning-booking-link" onClick={() => openKennelBookingFromPlanning(booking)}>
+                                {booking.dog?.name || "Chien non renseigné"}
+                                <ChevronRight size={16} />
+                              </button>
                               <span>{booking.client_name}</span>
                             </div>
                           </div>
@@ -16579,7 +18831,10 @@ function openTutorialFromPage(guideId) {
                           <div className="kennel-ops-item__head">
                             <DogAvatar dog={booking.dog} size="small" />
                             <div>
-                              <strong>{booking.dog?.name || "Chien non renseigné"}</strong>
+                              <button type="button" className="planning-booking-link" onClick={() => openKennelBookingFromPlanning(booking)}>
+                                {booking.dog?.name || "Chien non renseigné"}
+                                <ChevronRight size={16} />
+                              </button>
                               <span>{booking.client_name}</span>
                             </div>
                           </div>
@@ -16635,7 +18890,15 @@ function openTutorialFromPage(guideId) {
                         <ul>
                           {day.bookings.slice(0, KENNEL_MAX_BOOKINGS_PER_NIGHT + 1).map((booking) => (
                             <li key={`${day.date}-${booking.id}`}>
-                              {booking.dog?.name || booking.client_name} - {getKennelBookingAmount(booking).toFixed(2)} EUR
+                              <button
+                                type="button"
+                                className="kennel-calendar-booking-link"
+                                onClick={() => openKennelBookingFromPlanning(booking)}
+                                aria-label={`Ouvrir la réservation de ${booking.dog?.name || booking.client_name}`}
+                              >
+                                {booking.dog?.name || booking.client_name} - {getKennelBookingAmount(booking).toFixed(2)} EUR
+                                <ChevronRight size={14} />
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -17332,7 +19595,11 @@ function openTutorialFromPage(guideId) {
 
                 <div className="admin-reservation-list">
                   {filteredKennelBookings.map((booking) => (
-                    <article key={booking.id} className="admin-reservation-card">
+                    <article
+                      key={booking.id}
+                      id={`kennel-booking-${booking.id}`}
+                      className={`admin-reservation-card${String(focusedKennelBookingId) === String(booking.id) ? " is-focused" : ""}`}
+                    >
                       <div className="admin-reservation-dog">
                         <DogAvatar dog={booking.dog} size="medium" />
                         <div>
@@ -17353,16 +19620,46 @@ function openTutorialFromPage(guideId) {
                         </div>
                       </div>
                       <div className="admin-reservation-controls admin-reservation-controls--dates">
-                        <input
-                          type="date"
-                          value={booking.start_date || ""}
-                          onChange={(e) => updateKennelBooking(booking.id, { start_date: e.target.value })}
-                        />
-                        <input
-                          type="date"
-                          value={booking.end_date || ""}
-                          onChange={(e) => updateKennelBooking(booking.id, { end_date: e.target.value })}
-                        />
+                        <button
+                          type="button"
+                          className="reservation-date-edit-button"
+                          onClick={() => openReservationDateEditorFor(booking, "kennel")}
+                        >
+                          <CalendarDays size={16} /> Modifier les dates
+                        </button>
+                        {reservationDateEditor.key === `kennel-${booking.id}` && (
+                          <div className="reservation-date-editor reservation-date-editor--range">
+                            <label>
+                              <span>Arrivee</span>
+                              <input
+                                type="date"
+                                value={reservationDateEditor.start_date}
+                                onChange={(event) =>
+                                  setReservationDateEditor((editor) => ({ ...editor, start_date: event.target.value }))
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>Depart</span>
+                              <input
+                                type="date"
+                                value={reservationDateEditor.end_date}
+                                min={reservationDateEditor.start_date || undefined}
+                                onChange={(event) =>
+                                  setReservationDateEditor((editor) => ({ ...editor, end_date: event.target.value }))
+                                }
+                              />
+                            </label>
+                            <div>
+                              <button type="button" className="primary-action" onClick={() => saveReservationDateChanges(booking, "kennel")}>
+                                Enregistrer les dates
+                              </button>
+                              <button type="button" onClick={() => openReservationDateEditorFor(booking, "kennel")}>
+                                Fermer
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <label className="admin-amount-field">
                           <span>Montant confirmé</span>
                           <input
@@ -17424,7 +19721,11 @@ function openTutorialFromPage(guideId) {
                         </select>
                         <select
                           value={booking.status || "Demandée"}
-                          onChange={(e) => updateKennelBooking(booking.id, { status: e.target.value })}
+                          onChange={(e) =>
+                            String(e.target.value).startsWith("Annul")
+                              ? cancelAdminReservation(booking, "kennel")
+                              : updateKennelBooking(booking.id, { status: e.target.value })
+                          }
                         >
                           {reservationStatusOptions.map((status) => (
                             <option key={status} value={status}>{status}</option>
@@ -17435,11 +19736,74 @@ function openTutorialFromPage(guideId) {
                         </button>
                         <button
                           type="button"
-                          className={kennelContracts.some((contract) => contract.booking_id === booking.id) ? "is-contract-signed" : ""}
+                          className="reservation-cancel-button"
+                          disabled={String(booking.status || "").startsWith("Annul")}
+                          onClick={() => cancelAdminReservation(booking, "kennel")}
+                        >
+                          {String(booking.status || "").startsWith("Annul") ? "Reservation annulee" : "Annuler la reservation"}
+                        </button>
+                        <span className={`admin-contract-status ${
+                          kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id))
+                            ? "is-signed"
+                            : "is-missing"
+                        }`}>
+                          {kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id)) ? (
+                            <><CheckCircle2 size={16} /> Contrat signé</>
+                          ) : (
+                            <><AlertTriangle size={16} /> Contrat à signer</>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className={kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id)) ? "is-contract-signed" : ""}
                           onClick={() => setSelectedContractBooking(booking)}
                         >
-                          {kennelContracts.some((contract) => contract.booking_id === booking.id) ? "Voir le contrat signé" : "Aperçu du contrat"}
+                          {kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id)) ? "Voir le contrat signé" : "Aperçu du contrat"}
                         </button>
+                        {!kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id)) && (
+                          <button
+                            type="button"
+                            className="admin-contract-reminder-button"
+                            disabled={contractReminderRunningId === String(booking.id)}
+                            onClick={() => sendManualKennelContractReminder(booking)}
+                          >
+                            <BellRing size={16} />
+                            {contractReminderRunningId === String(booking.id) ? "Envoi..." : "Relancer signature"}
+                          </button>
+                        )}
+                        {booking.user_id && !String(booking.client_email || "").includes("@les-poulettes.local") && (
+                          <>
+                        <button
+                          type="button"
+                          className="admin-tool-button booking-message-toggle"
+                          onClick={() =>
+                            setOpenBookingMessageComposer((current) =>
+                              current === getBookingConversationKey("kennel", booking.id)
+                                ? ""
+                                : getBookingConversationKey("kennel", booking.id)
+                            )
+                          }
+                        >
+                          <MessageSquareText size={16} /> Ecrire dans l'application
+                        </button>
+                        {openBookingMessageComposer === getBookingConversationKey("kennel", booking.id) && (
+                          <div className="booking-message-composer">
+                            <textarea
+                              value={bookingMessageDrafts[getBookingConversationKey("kennel", booking.id)] || ""}
+                              onChange={(e) => updateBookingMessageDraft("kennel", booking.id, e.target.value)}
+                              placeholder="Votre message au client..."
+                              rows="3"
+                            />
+                            <div>
+                              <span>Le client le recevra dans son espace Messages.</span>
+                              <button type="button" className="primary-action" onClick={() => sendBookingMessage(booking, "kennel")}>
+                                Envoyer le message
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                          </>
+                        )}
                         <AdminPreparedMessageActions
                           scope="kennel"
                           item={booking}

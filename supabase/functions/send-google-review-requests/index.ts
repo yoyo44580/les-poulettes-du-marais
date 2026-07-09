@@ -85,6 +85,23 @@ serve(async (req) => {
       .select("id")
       .maybeSingle();
     runId = String(runRow?.id || "");
+    const { data: automationSetting } = await adminClient
+      .from("site_settings")
+      .select("value")
+      .eq("key", "automation_settings")
+      .maybeSingle();
+    if (automationSetting?.value?.google_reviews === false) {
+      if (runId) {
+        await adminClient.from("automation_runs").update({
+          status: "success",
+          finished_at: new Date().toISOString(),
+          details: { skipped: true, reason: "paused" },
+        }).eq("id", runId);
+      }
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: "paused" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const todayIso = getParisIsoDate();
     const { data: settingsRows, error: settingsError } = await adminClient
       .from("site_settings")

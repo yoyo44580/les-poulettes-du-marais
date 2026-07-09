@@ -76,7 +76,8 @@ export default defineConfig({
         importScripts: ['/push-handler.js'],
         runtimeCaching: [
           {
-            urlPattern: ({ request }) => request.mode === 'navigate',
+            urlPattern: ({ request, url }) =>
+              request.mode === 'navigate' && !/\.(xml|txt)$/i.test(url.pathname),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'poulettes-pages',
