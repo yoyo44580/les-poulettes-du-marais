@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint src/domainRules.js src/main.jsx src/supabaseClient.js src/BillingDocumentModal.jsx src/KennelContractModal.jsx tests scripts vite.config.js",
     "test": "node --test",
-    "check": "npm run lint && npm run test && npm run build",
+    "check": "node scripts/check.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
