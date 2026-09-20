@@ -10,6 +10,7 @@ const commands = [
       "src/main.jsx",
       "src/supabaseClient.js",
       "src/AdminActionCenter.jsx",
+      "src/AdminAssistantPanel.jsx",
       "src/BillingDocumentModal.jsx",
       "src/KennelContractModal.jsx",
       "tests",
