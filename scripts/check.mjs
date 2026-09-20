@@ -9,6 +9,7 @@ const commands = [
       "src/domainRules.js",
       "src/main.jsx",
       "src/supabaseClient.js",
+      "src/AdminActionCenter.jsx",
       "src/BillingDocumentModal.jsx",
       "src/KennelContractModal.jsx",
       "tests",
