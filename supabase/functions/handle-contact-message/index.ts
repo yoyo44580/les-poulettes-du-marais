@@ -157,6 +157,32 @@ serve(async (req) => {
       });
     }
 
+    const recentMessageCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { count: recentMessageCount, error: rateLimitError } = await adminClient
+      .from("contact_messages")
+      .select("id", { count: "exact", head: true })
+      .ilike("email", String(message.email || "").trim())
+      .gte("created_at", recentMessageCutoff);
+
+    if (rateLimitError) {
+      throw rateLimitError;
+    }
+
+    if (Number(recentMessageCount || 0) > 4) {
+      await adminClient
+        .from("contact_messages")
+        .update({
+          acknowledged_at: new Date().toISOString(),
+          acknowledgement_processing_at: null,
+        })
+        .eq("id", message.id);
+
+      return new Response(JSON.stringify({ error: "Trop de messages rapproches. Le message reste enregistre sans nouvel email." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     try {
       const emailResult = await sendContactAckEmail(resendApiKey, message);
       const pushResult = await notifyAdmins(adminClient, message);

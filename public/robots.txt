@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://lespoulettesdumarais.fr/sitemap.xml
+Sitemap: https://lespoulettesdumarais.fr/sitemap-index.xml

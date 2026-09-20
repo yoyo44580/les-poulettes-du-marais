@@ -74,6 +74,7 @@ export default defineConfig({
       registerType: 'prompt',
       workbox: {
         importScripts: ['/push-handler.js'],
+        navigateFallbackDenylist: [/^\/sitemap\.xml$/i, /^\/sitemap-index\.xml$/i, /^\/robots\.txt$/i],
         runtimeCaching: [
           {
             urlPattern: ({ request, url }) =>

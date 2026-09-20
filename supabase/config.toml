@@ -74,3 +74,23 @@ entrypoint = "./functions/send-kennel-contract-reminders/index.ts"
   enabled = true
   verify_jwt = false
   entrypoint = "./functions/send-client-message-reminders/index.ts"
+
+[functions.send-client-message-copy]
+  enabled = true
+  verify_jwt = true
+  entrypoint = "./functions/send-client-message-copy/index.ts"
+
+[functions.send-client-app-health-reminders]
+  enabled = true
+  verify_jwt = false
+  entrypoint = "./functions/send-client-app-health-reminders/index.ts"
+
+[functions.send-admin-urgent-followups]
+  enabled = true
+  verify_jwt = false
+  entrypoint = "./functions/send-admin-urgent-followups/index.ts"
+
+[functions.send-client-kennel-payment-reminders]
+  enabled = true
+  verify_jwt = false
+  entrypoint = "./functions/send-client-kennel-payment-reminders/index.ts"

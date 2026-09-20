@@ -10,6 +10,7 @@ const corsHeaders = {
 
 const FROM_EMAIL = "Les Poulettes du Marais <commandes@lespoulettesdumarais.fr>";
 const CLIENT_APP_URL = "https://lespoulettesdumarais.fr";
+const TRACKING_START_DATE = "2026-06-01";
 
 function getParisIsoDate() {
   const parts = new Intl.DateTimeFormat("fr-FR", {
@@ -20,18 +21,6 @@ function getParisIsoDate() {
   }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${values.year}-${values.month}-${values.day}`;
-}
-
-function addDays(isoDate: string, days: number) {
-  const date = new Date(`${isoDate}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function daysBetween(fromDate: string, toDate: string) {
-  const from = new Date(`${fromDate}T12:00:00Z`).getTime();
-  const to = new Date(`${toDate}T12:00:00Z`).getTime();
-  return Math.max(0, Math.round((to - from) / 86400000));
 }
 
 function formatDate(isoDate: string) {
@@ -50,6 +39,35 @@ function escapeHtml(value: unknown) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function normalizeStatus(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getStayDays(startDate: string, endDate: string) {
+  if (!startDate || !endDate) return 1;
+  const start = new Date(`${startDate}T12:00:00Z`).getTime();
+  const end = new Date(`${endDate}T12:00:00Z`).getTime();
+  const days = Math.round((end - start) / 86400000) + 1;
+  return Math.max(1, days);
+}
+
+function getBookingAmount(booking: Record<string, unknown>, dailyPrice: number) {
+  if (booking.amount_confirmed !== null && booking.amount_confirmed !== undefined && booking.amount_confirmed !== "") {
+    return Number(booking.amount_confirmed || 0);
+  }
+
+  return getStayDays(String(booking.start_date || ""), String(booking.end_date || "")) * dailyPrice;
+}
+
+function getRemainingAmount(booking: Record<string, unknown>, amount: number) {
+  if (booking.payment_received === true) return 0;
+  const deposit = Number(booking.deposit_amount || 0);
+  return Math.max(0, amount - Math.min(deposit, amount));
 }
 
 async function sendEmailWithRetry(apiKey: string, payload: Record<string, unknown>) {
@@ -78,7 +96,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    const cronSecret = Deno.env.get("DAILY_PAYMENT_EMAIL_SECRET");
+    const cronSecret = Deno.env.get("CLIENT_KENNEL_PAYMENT_REMINDER_SECRET") || Deno.env.get("DAILY_PAYMENT_EMAIL_SECRET");
     const vapidSubject = Deno.env.get("VAPID_SUBJECT");
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
     const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
@@ -86,7 +104,7 @@ serve(async (req) => {
     const isServiceRoleRequest = req.headers.get("Authorization") === `Bearer ${serviceRoleKey}`;
 
     if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
-      throw new Error("Configuration des relances de contrat incomplete.");
+      throw new Error("Configuration des relances paiement client incomplete.");
     }
 
     if (!isServiceRoleRequest && (!cronSecret || requestSecret !== cronSecret)) {
@@ -98,12 +116,13 @@ serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     runClient = adminClient;
-    const requestBody = await req.json().catch(() => ({}));
-    const manualBookingId = requestBody?.bookingId ? String(requestBody.bookingId) : "";
-    const triggerSource = requestBody?.triggerSource === "manual" || manualBookingId ? "manual" : "scheduled";
+    const body = await req.json().catch(() => ({}));
+    const triggerSource = body?.triggerSource === "manual" ? "manual" : "scheduled";
+    const todayIso = getParisIsoDate();
+
     const { data: runRow } = await adminClient
       .from("automation_runs")
-      .insert({ automation_key: "kennel_contracts", trigger_source: triggerSource })
+      .insert({ automation_key: "client_kennel_payments", trigger_source: triggerSource })
       .select("id")
       .maybeSingle();
     runId = String(runRow?.id || "");
@@ -113,7 +132,7 @@ serve(async (req) => {
       .select("value")
       .eq("key", "automation_settings")
       .maybeSingle();
-    if (!manualBookingId && automationSetting?.value?.kennel_contracts === false) {
+    if (automationSetting?.value?.client_kennel_payments === false) {
       if (runId) {
         await adminClient.from("automation_runs").update({
           status: "success",
@@ -126,66 +145,43 @@ serve(async (req) => {
       });
     }
 
-    const todayIso = getParisIsoDate();
-    const reminderEndDate = addDays(todayIso, 7);
+    const { data: services } = await adminClient.from("kennel_services").select("price").eq("active", true).limit(1);
+    const dailyPrice = Number(services?.[0]?.price || 18);
+
     const { data: bookings, error: bookingsError } = await adminClient
       .from("kennel_bookings")
-      .select("id, user_id, client_name, client_email, start_date, end_date, status, archived_at, dogs(name)")
-      .gte("start_date", todayIso)
-      .lte("start_date", reminderEndDate)
-      .eq("status", "Confirmée")
-      .is("archived_at", null)
-      .not("client_email", "is", null);
+      .select("id, user_id, client_name, client_email, start_date, end_date, status, amount_confirmed, deposit_amount, payment_received, payment_method, archived_at, dog:dogs(id, name)")
+      .gte("start_date", TRACKING_START_DATE)
+      .lt("end_date", todayIso)
+      .not("client_email", "is", null)
+      .order("end_date", { ascending: true });
 
     if (bookingsError) throw bookingsError;
 
-    let scopedBookings = bookings || [];
-    if (manualBookingId) {
-      const { data: manualBookings, error: manualBookingsError } = await adminClient
-        .from("kennel_bookings")
-        .select("id, user_id, client_name, client_email, start_date, end_date, status, archived_at, dogs(name)")
-        .eq("id", manualBookingId)
-        .not("client_email", "is", null);
-      if (manualBookingsError) throw manualBookingsError;
-      scopedBookings = manualBookings || [];
-    }
+    const rawCandidates = (bookings || [])
+      .filter((booking) => {
+        const status = normalizeStatus(booking.status);
+        return !status.startsWith("annul") && !String(booking.archived_at || "").trim();
+      })
+      .map((booking) => {
+        const amount = getBookingAmount(booking, dailyPrice);
+        const remaining = getRemainingAmount(booking, amount);
+        return { booking, amount, remaining };
+      })
+      .filter((item) => item.remaining > 0);
 
-    const bookingIds = scopedBookings.map((booking) => booking.id);
-    const [{ data: contracts, error: contractsError }, { data: existing, error: existingError }] =
-      bookingIds.length > 0
-        ? await Promise.all([
-            adminClient.from("kennel_contracts").select("booking_id").in("booking_id", bookingIds),
-            adminClient.from("kennel_contract_reminders").select("booking_id, reminder_kind").in("booking_id", bookingIds),
-          ])
-        : [{ data: [], error: null }, { data: [], error: null }];
-
-    if (contractsError) throw contractsError;
+    const bookingIds = rawCandidates.map((item) => item.booking.id);
+    const { data: existingReminders, error: existingError } = bookingIds.length > 0
+      ? await adminClient
+          .from("kennel_payment_reminders")
+          .select("booking_id")
+          .eq("reminder_date", todayIso)
+          .in("booking_id", bookingIds)
+      : { data: [], error: null };
     if (existingError) throw existingError;
 
-    const signedBookingIds = new Set((contracts || []).map((contract) => String(contract.booking_id)));
-    const existingKeys = new Set((existing || []).map((item) => `${item.booking_id}:${item.reminder_kind}`));
-    const candidates = scopedBookings.filter((booking) => {
-      const bookingId = String(booking.id);
-      const status = String(booking.status || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      const isInScheduledReminderWindow =
-        String(booking.start_date || "") >= todayIso &&
-        String(booking.start_date || "") <= reminderEndDate;
-      return (
-        !signedBookingIds.has(bookingId) &&
-        !String(booking.archived_at || "").trim() &&
-        (manualBookingId ? String(booking.start_date || "") >= todayIso : isInScheduledReminderWindow) &&
-        status.startsWith("confirm") &&
-        !status.startsWith("annul")
-      );
-    }).map((booking) => {
-      const daysBefore = daysBetween(todayIso, String(booking.start_date));
-      const reminderKind = daysBefore <= 2 ? "urgent" : "upcoming";
-      return { booking, daysBefore, reminderKind };
-    }).filter(({ booking, reminderKind }) => {
-      const bookingId = String(booking.id);
-      return manualBookingId || !existingKeys.has(`${bookingId}:${reminderKind}`);
-    });
-
+    const alreadyReminded = new Set((existingReminders || []).map((item) => String(item.booking_id)));
+    const candidates = rawCandidates.filter((item) => !alreadyReminded.has(String(item.booking.id)));
     const userIds = Array.from(new Set(candidates.map(({ booking }) => String(booking.user_id || "")).filter(Boolean)));
     const { data: subscriptions, error: subscriptionsError } = userIds.length > 0
       ? await adminClient
@@ -202,23 +198,18 @@ serve(async (req) => {
     const expiredSubscriptionIds: string[] = [];
     let failed = 0;
 
-    for (const { booking, daysBefore, reminderKind } of candidates) {
-      const dogName = String(booking.dogs?.name || "votre chien");
+    for (const { booking, amount, remaining } of candidates) {
+      const dogName = String(booking.dog?.name || "votre chien");
       const clientName = String(booking.client_name || "").trim();
       const greeting = clientName ? `Bonjour ${clientName},` : "Bonjour,";
-      const startDateLabel = formatDate(String(booking.start_date));
-      const subject = reminderKind === "urgent"
-        ? `Contrat à signer rapidement pour le séjour de ${dogName}`
-        : `Le contrat du séjour de ${dogName} est prêt à être signé`;
-      const message = reminderKind === "urgent"
-        ? `Le séjour de ${dogName} commence ${daysBefore === 0 ? "aujourd'hui" : `dans ${daysBefore} jour${daysBefore > 1 ? "s" : ""}`} et le contrat n'est pas encore signé.`
-        : `Le séjour de ${dogName} débute le ${startDateLabel}. Le contrat est disponible dans votre espace client et attend votre signature.`;
+      const subject = `Rappel paiement du séjour de ${dogName}`;
+      const message = `Le séjour de ${dogName}, terminé le ${formatDate(String(booking.end_date))}, présente encore un reste à régler de ${remaining.toFixed(2)} €.`;
       const emailSent = await sendEmailWithRetry(resendApiKey, {
         from: FROM_EMAIL,
         to: booking.client_email,
         subject,
-        text: `${greeting}\n\n${message}\n\nVous pouvez le consulter et le signer depuis votre espace client : ${CLIENT_APP_URL}\n\nMerci et à bientôt,\nLes Poulettes du Marais`,
-        html: `<div style="font-family:Arial,sans-serif;color:#24352a;line-height:1.6;max-width:620px;margin:auto"><div style="border-top:7px solid #315c3d;background:#fffdf8;padding:28px"><p>${escapeHtml(greeting)}</p><h1 style="color:#315c3d;font-size:24px;line-height:1.25">${escapeHtml(subject)}</h1><p>${escapeHtml(message)}</p><p>La signature ne prend que quelques instants.</p><p style="margin:26px 0"><a href="${CLIENT_APP_URL}" style="display:inline-block;background:#315c3d;color:#fff;text-decoration:none;padding:13px 18px;border-radius:6px;font-weight:bold">Voir et signer mon contrat</a></p><p>Merci et à bientôt,<br><strong>Les Poulettes du Marais</strong></p></div></div>`,
+        text: `${greeting}\n\n${message}\n\nVous pouvez retrouver le détail depuis votre espace client : ${CLIENT_APP_URL}\n\nSi le paiement vient d'être effectué, vous pouvez ignorer ce message.\n\nMerci beaucoup,\nLes Poulettes du Marais`,
+        html: `<div style="font-family:Arial,sans-serif;color:#2c241d;line-height:1.6;max-width:640px;margin:auto"><div style="border-top:7px solid #b91c1c;background:#fffdf8;padding:28px"><p>${escapeHtml(greeting)}</p><h1 style="color:#991b1b;font-size:24px;line-height:1.25">${escapeHtml(subject)}</h1><p>${escapeHtml(message)}</p><p>Si le paiement vient d'être effectué, vous pouvez simplement ignorer ce message.</p><p style="margin:26px 0"><a href="${CLIENT_APP_URL}" style="display:inline-block;background:#b91c1c;color:#fff;text-decoration:none;padding:13px 18px;border-radius:6px;font-weight:bold">Voir mon espace client</a></p><p>Merci beaucoup,<br><strong>Les Poulettes du Marais</strong></p></div></div>`,
       });
 
       if (!emailSent) {
@@ -228,7 +219,11 @@ serve(async (req) => {
 
       let pushSent = 0;
       if (pushConfigured && booking.user_id) {
-        const payload = JSON.stringify({ title: subject, body: message, url: "/" });
+        const payload = JSON.stringify({
+          title: "Paiement pension à finaliser",
+          body: `${remaining.toFixed(2)} € restent à régler pour le séjour de ${dogName}.`,
+          url: "/",
+        });
         for (const subscription of (subscriptions || []).filter((item) => item.user_id === booking.user_id)) {
           try {
             await webpush.sendNotification({
@@ -246,22 +241,28 @@ serve(async (req) => {
       logRows.push({
         booking_id: booking.id,
         user_id: booking.user_id || null,
-        reminder_kind: reminderKind,
+        reminder_date: todayIso,
         email_sent: true,
         push_sent: pushSent > 0,
-        days_before: daysBefore,
-        sent_at: new Date().toISOString(),
-        details: { email: booking.client_email, dog_name: dogName, push_count: pushSent, trigger_source: triggerSource },
+        remaining_amount: remaining,
+        details: {
+          email: booking.client_email,
+          dog_name: dogName,
+          amount,
+          remaining,
+          push_count: pushSent,
+          trigger_source: triggerSource,
+        },
       });
     }
 
     if (expiredSubscriptionIds.length > 0) {
-      await adminClient.from("client_push_subscriptions").delete().in("id", expiredSubscriptionIds);
+      await adminClient.from("client_push_subscriptions").delete().in("id", Array.from(new Set(expiredSubscriptionIds)));
     }
     if (logRows.length > 0) {
       const { error: logError } = await adminClient
-        .from("kennel_contract_reminders")
-        .upsert(logRows, { onConflict: "booking_id,reminder_kind" });
+        .from("kennel_payment_reminders")
+        .upsert(logRows, { onConflict: "booking_id,reminder_date" });
       if (logError) throw logError;
     }
 
@@ -271,8 +272,8 @@ serve(async (req) => {
         finished_at: new Date().toISOString(),
         processed_count: logRows.length,
         failed_count: failed,
-        details: { candidates: candidates.length, upcoming_days: 7, urgent_days: 2 },
-        error_message: failed > 0 && logRows.length === 0 ? "Aucune relance de contrat n'a pu être envoyée." : null,
+        details: { candidates: candidates.length, already_reminded_today: alreadyReminded.size },
+        error_message: failed > 0 && logRows.length === 0 ? "Aucune relance paiement client n'a pu etre envoyee." : null,
       }).eq("id", runId);
     }
 

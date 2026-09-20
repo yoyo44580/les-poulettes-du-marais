@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Garde de chien Pornic - Pension canine familiale Pays de Retz</title>
+    <meta
+      name="description"
+      content="Garde de chien à Pornic et autour : pension canine familiale à Bourneuf-en-Retz, accueil limité, pension climatisée, suivi personnalisé et réservation en ligne dans le Pays de Retz."
+    />
+    <link rel="canonical" href="https://lespoulettesdumarais.fr/garde-chien-pornic/" />
+    <meta property="og:title" content="Garde de chien Pornic - Les Poulettes du Marais" />
+    <meta
+      property="og:description"
+      content="Une solution de garde de chien familiale près de Pornic, avec pension climatisée, petit effectif et suivi personnalisé."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://lespoulettesdumarais.fr/garde-chien-pornic/" />
+    <meta property="og:image" content="https://lespoulettesdumarais.fr/images/pension.jpg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      :root {
+        color: #173a26;
+        background: #fffdf8;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #fffdf8;
+        color: #173a26;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .hero {
+        min-height: 74vh;
+        display: grid;
+        align-items: end;
+        background:
+          linear-gradient(90deg, rgba(6, 18, 12, 0.84), rgba(6, 18, 12, 0.46) 54%, rgba(6, 18, 12, 0.18)),
+          linear-gradient(180deg, rgba(6, 18, 12, 0.2), rgba(6, 18, 12, 0.78)),
+          url("../images/pension.jpg") center/cover;
+        color: #fffdf8;
+        padding: 32px 18px;
+      }
+
+      .hero__inner,
+      main {
+        width: min(1120px, 100%);
+        margin: 0 auto;
+      }
+
+      .hero__inner {
+        max-width: 880px;
+        margin-left: max(0px, calc((100% - 1120px) / 2));
+        border: 1px solid rgba(255, 253, 248, 0.18);
+        border-radius: 12px;
+        background: rgba(8, 24, 16, 0.64);
+        padding: clamp(22px, 4vw, 42px);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(3px);
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 0.8rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 850px;
+        margin: 0;
+        font-size: clamp(2.35rem, 6vw, 5rem);
+        line-height: 0.98;
+      }
+
+      .hero p {
+        max-width: 720px;
+        margin: 18px 0 0;
+        color: rgba(255, 253, 248, 0.96);
+        font-size: clamp(1rem, 2vw, 1.28rem);
+        font-weight: 850;
+        line-height: 1.45;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: #f7c948;
+        color: #173a26;
+        padding: 0 18px;
+        font-weight: 950;
+        text-decoration: none;
+      }
+
+      .button--light {
+        background: rgba(255, 253, 248, 0.95);
+      }
+
+      main {
+        display: grid;
+        gap: 34px;
+        padding: 42px 18px 56px;
+      }
+
+      section {
+        display: grid;
+        gap: 16px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(1.7rem, 3vw, 2.5rem);
+      }
+
+      p,
+      li {
+        margin: 0;
+        color: #4d473b;
+        font-size: 1rem;
+        font-weight: 720;
+        line-height: 1.6;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .card,
+      .faq article {
+        border: 1px solid rgba(67, 63, 45, 0.12);
+        border-radius: 8px;
+        background: #fff8e8;
+        padding: 18px;
+      }
+
+      .card strong,
+      .faq strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #173a26;
+        font-size: 1.05rem;
+        font-weight: 950;
+      }
+
+      .local {
+        border-left: 5px solid #173a26;
+        background: #eef6ea;
+        padding: 18px;
+      }
+
+      .faq {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      footer {
+        padding: 22px 18px 34px;
+        background: #173a26;
+        color: #fffdf8;
+        text-align: center;
+      }
+
+      footer p {
+        color: #fffdf8;
+      }
+
+      @media (max-width: 760px) {
+        .hero {
+          min-height: 70vh;
+        }
+
+        .grid,
+        .faq {
+          grid-template-columns: 1fr;
+        }
+
+        .actions .button {
+          width: 100%;
+        }
+      }
+    </style>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "@id": "https://lespoulettesdumarais.fr/garde-chien-pornic/#business",
+        "name": "Les Poulettes du Marais - Garde de chien près de Pornic",
+        "url": "https://lespoulettesdumarais.fr/garde-chien-pornic/",
+        "image": "https://lespoulettesdumarais.fr/images/pension.jpg",
+        "telephone": "+33670203891",
+        "email": "lespoulettesdumarais@gmail.com",
+        "priceRange": "€€",
+        "description": "Garde de chien près de Pornic, pension canine familiale à Bourneuf-en-Retz avec accueil limité, pension climatisée, contrat en ligne et suivi personnalisé.",
+        "additionalType": "https://schema.org/AnimalShelter",
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 47.01281,
+          "longitude": -1.91804
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "61 Les Ruelles",
+          "postalCode": "44580",
+          "addressLocality": "Bourneuf-en-Retz",
+          "addressCountry": "FR"
+        },
+        "areaServed": [
+          "Pornic",
+          "Bourneuf-en-Retz",
+          "Villeneuve-en-Retz",
+          "Sainte-Pazanne",
+          "Machecoul-Saint-Même",
+          "La Bernerie-en-Retz",
+          "Pays de Retz",
+          "Loire-Atlantique"
+        ],
+        "makesOffer": {
+          "@type": "Offer",
+          "name": "Garde de chien proche Pornic",
+          "itemOffered": {
+            "@type": "Service",
+            "name": "Garde de chien près de Pornic",
+            "areaServed": "Pornic, Bourneuf-en-Retz, Villeneuve-en-Retz et Pays de Retz",
+            "description": "Accueil de chiens en pension familiale, en petit effectif, avec suivi personnalisé."
+          }
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Quelle solution pour faire garder son chien près de Pornic ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Les Poulettes du Marais proposent une pension canine familiale à Bourneuf-en-Retz, dans le Pays de Retz, proche de Pornic et des communes voisines."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Faut-il créer un compte pour réserver ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Oui, le compte client permet de suivre la demande, les informations du chien, le contrat et les messages liés au séjour."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Quelles informations préparer pour une garde de chien ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Il faut préparer les dates du séjour, les informations du chien, son alimentation, ses vaccins, son numéro de puce, son assurance, son vétérinaire habituel et les consignes utiles."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero__inner">
+        <p class="eyebrow">Les Poulettes du Marais</p>
+        <h1>Garde de chien à Pornic et autour</h1>
+        <p>
+          Une pension canine familiale à Bourneuf-en-Retz, proche de Pornic, pour accueillir votre chien en petit nombre
+          dans un cadre calme, climatisé et suivi avec attention.
+        </p>
+        <div class="actions">
+          <a class="button" href="/?screen=kennel">Voir les disponibilites</a>
+          <a class="button button--light" href="/pension-canine/">Decouvrir la pension canine</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <h2>Une solution de garde pour les chiens autour de Pornic</h2>
+        <p>
+          Si vous recherchez une garde de chien autour de Pornic, Les Poulettes du Marais proposent une pension canine
+          familiale située à Bourneuf-en-Retz. L'accueil est volontairement limité afin de conserver un suivi attentif :
+          habitudes du chien, alimentation, vétérinaire habituel, vaccins, traitement éventuel, assurance et consignes particulières.
+          Cette page s'adresse aussi aux familles qui cherchent une pension chien Pornic, une garde chien Pornic,
+          une pension canine proche Pornic ou une solution de garde familiale dans le Pays de Retz.
+        </p>
+      </section>
+
+      <section class="local">
+        <h2>Pension chien Pornic : pourquoi choisir Les Poulettes du Marais ?</h2>
+        <p>
+          La pension canine se situe dans un environnement calme, proche du marais, avec un accueil en petit effectif.
+          Le fonctionnement est pensé pour rassurer les propriétaires : fiche chien détaillée, informations de santé,
+          contrat en ligne, suivi du séjour et contact facile avec la ferme.
+        </p>
+      </section>
+
+      <section class="grid" aria-label="Avantages de la garde de chien">
+        <article class="card">
+          <strong>Proche de Pornic</strong>
+          <p>La pension se situe à Bourneuf-en-Retz, dans le Pays de Retz, pratique pour Pornic et les communes voisines.</p>
+        </article>
+        <article class="card">
+          <strong>Accueil familial</strong>
+          <p>Le nombre de chiens accueillis est limite pour garder un suivi plus simple, humain et rassurant.</p>
+        </article>
+        <article class="card">
+          <strong>Pension climatisee</strong>
+          <p>L'espace pension est climatisé pour aider au confort des chiens pendant les périodes chaudes.</p>
+        </article>
+      </section>
+
+      <section class="local">
+        <h2>Secteur couvert</h2>
+        <p>
+          La pension peut intéresser les familles situées à Pornic, Bourneuf-en-Retz, Villeneuve-en-Retz,
+          Sainte-Pazanne, Machecoul-Saint-Même, La Bernerie-en-Retz et plus largement dans le Pays de Retz.
+        </p>
+      </section>
+
+      <section>
+        <h2>Comment reserver une garde de chien ?</h2>
+        <p>
+          La demande se fait en ligne depuis l'application. Vous choisissez les dates, vous renseignez les informations du chien,
+          puis la pension confirme la disponibilité. Une pré-visite peut être organisée avant le séjour selon le profil du chien.
+        </p>
+        <div class="actions">
+          <a class="button" href="/?screen=kennel">Demander une réservation</a>
+          <a class="button button--light" href="tel:+33670203891">Appeler la pension</a>
+        </div>
+      </section>
+
+      <section>
+        <h2>Questions fréquentes</h2>
+        <div class="faq">
+          <article>
+            <strong>La garde convient-elle pour plusieurs jours ?</strong>
+            <p>Oui, la demande permet de choisir une période de séjour et d'indiquer les habitudes du chien.</p>
+          </article>
+          <article>
+            <strong>Faut-il creer un compte ?</strong>
+            <p>Oui, le compte client permet de suivre la demande, les informations du chien, le contrat et les documents utiles.</p>
+          </article>
+          <article>
+            <strong>Quelles informations sont demandees ?</strong>
+            <p>Nom du chien, dates, puce, vaccins, assurance, vétérinaire, alimentation, comportement et consignes.</p>
+          </article>
+          <article>
+            <strong>La pension est-elle proche de Pornic ?</strong>
+            <p>Elle est située à Bourneuf-en-Retz, dans le Pays de Retz, proche du secteur de Pornic.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Les Poulettes du Marais - 61 Les Ruelles, 44580 Bourneuf-en-Retz - SIRET 89493132800013</p>
+    </footer>
+  </body>
+</html>

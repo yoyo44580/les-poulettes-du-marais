@@ -28,6 +28,18 @@ const automations = {
     functionName: "send-client-message-reminders",
     secretName: "CLIENT_MESSAGE_REMINDER_SECRET",
   },
+  client_app_health: {
+    functionName: "send-client-app-health-reminders",
+    secretName: "CLIENT_APP_HEALTH_REMINDER_SECRET",
+  },
+  admin_urgent_followups: {
+    functionName: "send-admin-urgent-followups",
+    secretName: "ADMIN_URGENT_FOLLOWUP_SECRET",
+  },
+  client_kennel_payments: {
+    functionName: "send-client-kennel-payment-reminders",
+    secretName: "DAILY_PAYMENT_EMAIL_SECRET",
+  },
 } as const;
 
 serve(async (req) => {
