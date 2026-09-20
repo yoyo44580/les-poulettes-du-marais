@@ -5,6 +5,7 @@ import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, 
 import "./App.css";
 import {
   getKennelBillableDays,
+  getKennelBookingDays,
   getKennelCalendarStayDates,
   getCappedProductQuantity,
   getBookingPaymentSummary,
