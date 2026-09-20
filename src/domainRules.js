@@ -63,6 +63,115 @@ export function normalizeStatusKeyword(value) {
     .toLowerCase();
 }
 
+export function getTrackedProductStock(product) {
+  if (product?.stock_quantity === null || product?.stock_quantity === undefined) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor(Number(product.stock_quantity) || 0));
+}
+
+export function isProductQuantityAvailable(product, quantity) {
+  if (!product || product.active === false) {
+    return false;
+  }
+
+  const stock = getTrackedProductStock(product);
+  const requestedQuantity = Math.max(0, Number(quantity) || 0);
+
+  return stock === null || requestedQuantity <= stock;
+}
+
+export function getCappedProductQuantity(product, currentQuantity, delta) {
+  const requestedQuantity = Math.max(0, (Number(currentQuantity) || 0) + Number(delta || 0));
+  const stock = getTrackedProductStock(product);
+
+  return stock === null ? requestedQuantity : Math.min(requestedQuantity, stock);
+}
+
+export function getClientOrderMaxDeliveryDate(todayIso, maxDays = 14) {
+  if (!todayIso) return "";
+
+  const date = new Date(`${todayIso}T12:00:00`);
+  date.setDate(date.getDate() + maxDays);
+  return getLocalIsoDate(date);
+}
+
+export function isClientDeliveryDateAllowed(deliveryDate, todayIso, maxDays = 14) {
+  if (!deliveryDate || !todayIso) return false;
+
+  return deliveryDate >= todayIso && deliveryDate <= getClientOrderMaxDeliveryDate(todayIso, maxDays);
+}
+
+const clientOrderCancelWindowMs = 6 * 60 * 60 * 1000;
+
+export function getClientOrderCancelInfo(order, now = Date.now()) {
+  const normalizedStatus = normalizeOrderStatus(order?.status || "");
+  const createdAt = order?.created_at ? new Date(order.created_at) : null;
+  const createdTime = createdAt?.getTime();
+
+  if (!order || normalizedStatus === "Annulée") {
+    return { canCancel: false, reason: "Commande déjà annulée." };
+  }
+
+  if (!["À préparer", "A préparer", "Demandée", "Demandee"].includes(normalizedStatus)) {
+    return { canCancel: false, reason: "La commande est déjà en préparation avancée." };
+  }
+
+  if (!createdAt || Number.isNaN(createdTime)) {
+    return { canCancel: false, reason: "Heure de création indisponible." };
+  }
+
+  const expiresAt = new Date(createdTime + clientOrderCancelWindowMs);
+
+  if (Number(now) > expiresAt.getTime()) {
+    return { canCancel: false, expiresAt, reason: "Le délai d'annulation de 6h est dépassé." };
+  }
+
+  return { canCancel: true, expiresAt, reason: "" };
+}
+
+export function isActiveReservationStatus(status) {
+  return !normalizeStatusKeyword(status).startsWith("annul");
+}
+
+function normalizePerson(value) {
+  return String(value || "").trim().toLocaleLowerCase("fr");
+}
+
+export function getEducationPeopleSignature({ accompanistName, additionalAccompanists = [], children = [] }) {
+  return [
+    `adult:${normalizePerson(accompanistName)}`,
+    ...additionalAccompanists.map((accompanist) => `adult:${normalizePerson(accompanist)}`).sort(),
+    ...children
+      .map((child) => `${normalizePerson(child.firstName || child.first_name)}:${Number(child.age || 0)}`)
+      .sort(),
+  ].join("|");
+}
+
+export function hasDuplicateEducationBooking(bookings, request) {
+  const requestedPeopleSignature = getEducationPeopleSignature(request);
+
+  return (bookings || []).some((booking) =>
+    String(booking.user_id || "") === String(request.userId || "") &&
+    String(booking.date_slot_id || "") === String(request.dateSlotId || "") &&
+    isActiveReservationStatus(booking.status) &&
+    getEducationPeopleSignature({
+      accompanistName: booking.accompanist_name,
+      additionalAccompanists: Array.isArray(booking.additional_accompanists)
+        ? booking.additional_accompanists
+        : [],
+      children: Array.isArray(booking.children) ? booking.children : [],
+    }) === requestedPeopleSignature
+  );
+}
+
+export function getActiveEducationParticipantCount(bookings) {
+  return (bookings || [])
+    .filter((booking) => isActiveReservationStatus(booking.status))
+    .reduce((sum, booking) => sum + Number(booking.participants || 0), 0);
+}
+
 export function getOrderItems(order) {
   if (Array.isArray(order?.items) && order.items.length > 0) {
     return order.items;

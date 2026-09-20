@@ -1,12 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getActiveEducationParticipantCount,
+  getCappedProductQuantity,
+  getClientOrderCancelInfo,
+  getClientOrderMaxDeliveryDate,
   getKennelBillableDays,
   getKennelCalendarStayDates,
   getOrderDuplicateSignature,
   getOrderDuplicateSignatureFromItems,
   getReservationTrackingSteps,
+  hasDuplicateEducationBooking,
+  isClientDeliveryDateAllowed,
   isPaidAccompanistEducationActivity,
+  isProductQuantityAvailable,
   isTreasureHuntActivity,
 } from "../src/domainRules.js";
 
@@ -80,4 +87,95 @@ test("un contrat pension non signé reste clairement à signer", () => {
 
   assert.deepEqual(steps.at(-2), { label: "Contrat à signer", state: "current" });
   assert.deepEqual(steps.at(-1), { label: "Séjour terminé", state: "todo" });
+});
+
+test("un produit suivi avec un stock à zéro ne peut pas être commandé", () => {
+  const product = { id: "courgette-ronde", active: true, stock_quantity: 0 };
+
+  assert.equal(isProductQuantityAvailable(product, 1), false);
+  assert.equal(getCappedProductQuantity(product, 0, 1), 0);
+});
+
+test("la quantité du panier ne peut jamais dépasser le stock disponible", () => {
+  const product = { id: "courgette", active: true, stock_quantity: 3 };
+
+  assert.equal(getCappedProductQuantity(product, 2, 1), 3);
+  assert.equal(getCappedProductQuantity(product, 3, 1), 3);
+  assert.equal(isProductQuantityAvailable(product, 3), true);
+  assert.equal(isProductQuantityAvailable(product, 4), false);
+});
+
+test("un produit sans suivi de stock reste commandable", () => {
+  const product = { id: "box12", active: true, stock_quantity: null };
+
+  assert.equal(getCappedProductQuantity(product, 12, 1), 13);
+  assert.equal(isProductQuantityAvailable(product, 100), true);
+});
+
+test("les commandes client sont limitées à quatorze jours", () => {
+  assert.equal(getClientOrderMaxDeliveryDate("2026-09-20"), "2026-10-04");
+  assert.equal(isClientDeliveryDateAllowed("2026-10-04", "2026-09-20"), true);
+  assert.equal(isClientDeliveryDateAllowed("2026-10-05", "2026-09-20"), false);
+  assert.equal(isClientDeliveryDateAllowed("2026-09-19", "2026-09-20"), false);
+});
+
+test("une commande reste annulable jusqu'à six heures après sa création", () => {
+  const createdAt = "2026-09-20T08:00:00.000Z";
+  const order = { status: "À préparer", created_at: createdAt };
+
+  assert.equal(getClientOrderCancelInfo(order, Date.parse("2026-09-20T13:59:59.000Z")).canCancel, true);
+  assert.equal(getClientOrderCancelInfo(order, Date.parse("2026-09-20T14:00:01.000Z")).canCancel, false);
+});
+
+test("une commande déjà préparée ou annulée ne peut plus être annulée", () => {
+  const now = Date.parse("2026-09-20T09:00:00.000Z");
+
+  assert.equal(getClientOrderCancelInfo({ status: "Prête", created_at: "2026-09-20T08:00:00.000Z" }, now).canCancel, false);
+  assert.equal(getClientOrderCancelInfo({ status: "Annulée", created_at: "2026-09-20T08:00:00.000Z" }, now).canCancel, false);
+});
+
+test("une réservation ferme identique est reconnue malgré l'ordre des participants", () => {
+  const bookings = [{
+    user_id: "client-1",
+    date_slot_id: "slot-1",
+    status: "Demandée",
+    accompanist_name: "Mme Dupont",
+    additional_accompanists: ["Paul", "Anne"],
+    children: [{ firstName: "Léa", age: 8 }, { first_name: "Hugo", age: 6 }],
+  }];
+
+  assert.equal(hasDuplicateEducationBooking(bookings, {
+    userId: "client-1",
+    dateSlotId: "slot-1",
+    accompanistName: "mme dupont",
+    additionalAccompanists: ["Anne", "Paul"],
+    children: [{ firstName: "Hugo", age: 6 }, { firstName: "Léa", age: 8 }],
+  }), true);
+});
+
+test("une réservation ferme annulée ne bloque pas une nouvelle demande", () => {
+  const cancelledBooking = {
+    user_id: "client-1",
+    date_slot_id: "slot-1",
+    status: "Annulée",
+    accompanist_name: "Mme Dupont",
+    children: [{ firstName: "Léa", age: 8 }],
+  };
+
+  assert.equal(hasDuplicateEducationBooking([cancelledBooking], {
+    userId: "client-1",
+    dateSlotId: "slot-1",
+    accompanistName: "Mme Dupont",
+    children: [{ firstName: "Léa", age: 8 }],
+  }), false);
+});
+
+test("les réservations annulées libèrent les places du créneau ferme", () => {
+  const bookings = [
+    { status: "Confirmée", participants: 4 },
+    { status: "Annulée", participants: 3 },
+    { status: "Demandée", participants: 2 },
+  ];
+
+  assert.equal(getActiveEducationParticipantCount(bookings), 6);
 });

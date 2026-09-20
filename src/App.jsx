@@ -6,11 +6,18 @@ import "./App.css";
 import {
   getKennelBillableDays,
   getKennelCalendarStayDates,
+  getCappedProductQuantity,
+  getClientOrderCancelInfo,
+  getClientOrderMaxDeliveryDate,
   getOrderDuplicateSignature,
   getOrderDuplicateSignatureFromItems,
   getOrderItems,
   getReservationTrackingSteps,
+  hasDuplicateEducationBooking,
+  isActiveReservationStatus,
+  isClientDeliveryDateAllowed,
   isPaidAccompanistEducationActivity,
+  isProductQuantityAvailable,
   isTreasureHuntActivity,
   normalizeOrderStatus,
   normalizeStatusKeyword,
@@ -1255,34 +1262,6 @@ function BillingDocumentsList({ documents, onOpen, compact = false }) {
   );
 }
 
-const clientOrderCancelWindowMs = 6 * 60 * 60 * 1000;
-
-function getClientOrderCancelInfo(order) {
-  const normalizedStatus = normalizeOrderStatus(order?.status || "");
-  const createdAt = order?.created_at ? new Date(order.created_at) : null;
-  const createdTime = createdAt?.getTime();
-
-  if (!order || normalizedStatus === "Annulée") {
-    return { canCancel: false, reason: "Commande déjà annulée." };
-  }
-
-  if (!["À préparer", "A préparer", "Demandée", "Demandee"].includes(normalizedStatus)) {
-    return { canCancel: false, reason: "La commande est déjà en préparation avancée." };
-  }
-
-  if (!createdAt || Number.isNaN(createdTime)) {
-    return { canCancel: false, reason: "Heure de création indisponible." };
-  }
-
-  const expiresAt = new Date(createdTime + clientOrderCancelWindowMs);
-
-  if (Date.now() > expiresAt.getTime()) {
-    return { canCancel: false, expiresAt, reason: "Le délai d'annulation de 6h est dépassé." };
-  }
-
-  return { canCancel: true, expiresAt, reason: "" };
-}
-
 function getClientOrderDateChangeInfo(order) {
   const normalizedStatus = normalizeOrderStatus(order?.status || "");
 
@@ -2165,16 +2144,13 @@ const selectedOccasionalSaleNeedsAccount = isReformHenOccasionalSaleItem(selecte
   }, [cart, products]);
 
   const hasUnavailableCartItems = selectedCartItems.some(
-    (product) =>
-      product.stock_quantity !== null &&
-      product.stock_quantity !== undefined &&
-      product.quantity > Number(product.stock_quantity || 0)
+    (product) => !isProductQuantityAvailable(product, product.quantity)
   );
 
 const hasSelectedEggProducts = selectedCartItems.some(
     (product) => isEggProduct(product) && product.size_eggs > 0
   );
-  const clientOrderMaxDeliveryDate = addLocalDays(getLocalIsoDate(), 14);
+  const clientOrderMaxDeliveryDate = getClientOrderMaxDeliveryDate(getLocalIsoDate());
 
   const availableDeliverySlots = useMemo(() => {
     const today = getLocalIsoDate();
@@ -2196,23 +2172,17 @@ const hasSelectedEggProducts = selectedCartItems.some(
 
   const clientAvailableDeliverySlots = useMemo(
     () =>
-      availableDeliverySlots.filter(
-        (slot) => String(slot.delivery_date || "") <= clientOrderMaxDeliveryDate
+      availableDeliverySlots.filter((slot) =>
+        isClientDeliveryDateAllowed(slot.delivery_date, getLocalIsoDate())
       ),
     [availableDeliverySlots, clientOrderMaxDeliveryDate]
   );
 
   function updateQty(id, delta) {
     const product = products.find((item) => item.id === id);
-    const trackedStock = product?.stock_quantity;
 
     setCart((prev) => {
-      const nextQuantity = Math.max(0, (prev[id] || 0) + delta);
-      const cappedQuantity = trackedStock === null || trackedStock === undefined
-        ? nextQuantity
-        : Math.min(nextQuantity, Number(trackedStock || 0));
-
-      return { ...prev, [id]: cappedQuantity };
+      return { ...prev, [id]: getCappedProductQuantity(product, prev[id], delta) };
     });
   }
 
@@ -3351,11 +3321,7 @@ async function placeOrder() {
   const unavailableItem = selectedCartItems.find((item) => {
     const freshProduct = freshProductsById.get(item.id);
 
-    return !freshProduct ||
-      freshProduct.active === false ||
-      (freshProduct.stock_quantity !== null &&
-        freshProduct.stock_quantity !== undefined &&
-        item.quantity > Number(freshProduct.stock_quantity || 0));
+    return !isProductQuantityAvailable(freshProduct, item.quantity);
   });
 
   if (unavailableItem) {
@@ -6103,7 +6069,7 @@ function getEducationSlotBookings(slot) {
         ? booking.date_slot_id === slot.id
         : booking.activity_type === activity?.name && booking.booking_date === slot.activity_date;
 
-      return sameSlot && !String(booking.status || "").toLowerCase().startsWith("annul");
+      return sameSlot && isActiveReservationStatus(booking.status);
     })
     .sort((a, b) => String(a.client_name || "").localeCompare(String(b.client_name || "")));
 }
@@ -7384,29 +7350,12 @@ async function createAdminKennelBooking(event) {
       showToast("Le jeu de piste se réserve pour un minimum de 3 participants payants.", "error");
       return;
     }
-    const normalizePerson = (value) => String(value || "").trim().toLocaleLowerCase("fr");
-    const requestedPeopleSignature = [
-      `adult:${normalizePerson(educationBookingForm.accompanistName)}`,
-      ...additionalAccompanists.map((accompanist) => `adult:${normalizePerson(accompanist)}`).sort(),
-      ...children.map((child) => `${normalizePerson(child.firstName)}:${Number(child.age || 0)}`).sort(),
-    ].join("|");
-    const duplicateBooking = educationBookings.find((booking) => {
-      const bookedChildren = Array.isArray(booking.children) ? booking.children : [];
-      const bookedAdditionalAccompanists = Array.isArray(booking.additional_accompanists)
-        ? booking.additional_accompanists
-        : [];
-      const bookedPeopleSignature = [
-        `adult:${normalizePerson(booking.accompanist_name)}`,
-        ...bookedAdditionalAccompanists.map((accompanist) => `adult:${normalizePerson(accompanist)}`).sort(),
-        ...bookedChildren
-          .map((child) => `${normalizePerson(child.firstName || child.first_name)}:${Number(child.age || 0)}`)
-          .sort(),
-      ].join("|");
-
-      return booking.user_id === currentUser.id &&
-        booking.date_slot_id === slot.id &&
-        !normalizePerson(booking.status).startsWith("annul") &&
-        bookedPeopleSignature === requestedPeopleSignature;
+    const duplicateBooking = hasDuplicateEducationBooking(educationBookings, {
+      userId: currentUser.id,
+      dateSlotId: slot.id,
+      accompanistName: educationBookingForm.accompanistName,
+      additionalAccompanists,
+      children,
     });
 
     if (duplicateBooking) {
