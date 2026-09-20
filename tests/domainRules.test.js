@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  collectPaginatedRows,
   getActiveEducationParticipantCount,
   getBookingPaymentSummary,
   getCappedProductQuantity,
@@ -24,6 +25,31 @@ import {
   isRecordLinkedToClient,
   isTreasureHuntActivity,
 } from "../src/domainRules.js";
+
+test("toutes les commandes sont chargées même lorsque Supabase limite chaque réponse", async () => {
+  const source = Array.from({ length: 5 }, (_, index) => ({ id: index + 1 }));
+  const requestedStarts = [];
+  const { data, error } = await collectPaginatedRows(async (from) => {
+    requestedStarts.push(from);
+    return {
+      data: source.slice(from, from + 2),
+      error: null,
+      count: source.length,
+    };
+  });
+
+  assert.equal(error, null);
+  assert.deepEqual(data, source);
+  assert.deepEqual(requestedStarts, [0, 2, 4]);
+});
+
+test("une erreur de chargement paginé est transmise sans masquer le problème", async () => {
+  const expectedError = new Error("chargement impossible");
+  const result = await collectPaginatedRows(async () => ({ data: null, error: expectedError, count: null }));
+
+  assert.equal(result.data, null);
+  assert.equal(result.error, expectedError);
+});
 
 test("le calendrier pension inclut tous les jours du séjour", () => {
   assert.deepEqual(getKennelCalendarStayDates("2026-09-20", "2026-09-22"), [

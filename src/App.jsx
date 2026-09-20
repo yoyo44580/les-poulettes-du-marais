@@ -4,6 +4,7 @@ import { supabase, supabaseUrl } from "./supabaseClient";
 import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, CalendarDays, CalendarClock, PackageCheck, Mail, LockKeyhole, UserRound, CheckCircle2, ArrowRight, History, Euro, Boxes, UsersRound, Search, Download, Printer, MapPin, Dog, School, CalendarCheck, ChevronRight, Egg, PawPrint, Heart, RefreshCw, HelpCircle, Copy, MessageSquareText, Star, ExternalLink, Eye, MousePointerClick, AlertTriangle, Snowflake, BellRing, Smartphone, Video, Trash2, Upload, Image as ImageIcon } from "lucide-react";
 import "./App.css";
 import {
+  collectPaginatedRows,
   getKennelBillableDays,
   getKennelBookingDays,
   getKennelCalendarStayDates,
@@ -3620,10 +3621,16 @@ async function saveOrderDeliveryDate(order, scope = "admin") {
 }
 
 const loadOrders = useCallback(async () => {
-  const { data: ordersData, error: ordersError } = await supabase
-    .from("orders")
-    .select("*")
-    .order("delivery_date", { ascending: true });
+  const { data: ordersData, error: ordersError } = await collectPaginatedRows(
+    (from, to) =>
+      supabase
+        .from("orders")
+        .select("*", { count: "exact" })
+        .order("delivery_date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+  );
 
   if (ordersError) {
     showToast("Erreur chargement commandes : " + ordersError.message);

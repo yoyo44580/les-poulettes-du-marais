@@ -311,6 +311,37 @@ export function getUnreadAdminReplies(replies, contactMessageIds, clientMessages
     .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 }
 
+export async function collectPaginatedRows(fetchPage, pageSize = 500) {
+  const rows = [];
+  let from = 0;
+  let totalCount = null;
+
+  while (true) {
+    const { data, error, count } = await fetchPage(from, from + pageSize - 1);
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+
+    if (Number.isFinite(count)) {
+      totalCount = count;
+    }
+
+    if (
+      page.length === 0 ||
+      (totalCount !== null && rows.length >= totalCount) ||
+      (totalCount === null && page.length < pageSize)
+    ) {
+      return { data: rows, error: null };
+    }
+
+    from += page.length;
+  }
+}
+
 export function getOrderItems(order) {
   if (Array.isArray(order?.items) && order.items.length > 0) {
     return order.items;
