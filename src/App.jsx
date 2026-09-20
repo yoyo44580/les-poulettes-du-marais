@@ -31,6 +31,7 @@ import {
   isTreasureHuntActivity,
   normalizeOrderStatus,
   normalizeStatusKeyword,
+  validateKennelBookingDogs,
 } from "./domainRules.js";
 
 const KennelContractModal = lazy(() => import("./KennelContractModal"));
@@ -534,6 +535,19 @@ const emptyKennelBookingForm = {
   vaccinesUpToDate: false,
   sterilized: false,
   photoConsent: "",
+  notes: "",
+};
+
+const emptyAdditionalKennelDog = {
+  dogName: "",
+  dogPhotoUrl: "",
+  dogBreed: "",
+  dogBirthYear: "",
+  dogSex: "",
+  dogMicrochipNumber: "",
+  dogNotMicrochipped: false,
+  vaccinesUpToDate: false,
+  sterilized: false,
   notes: "",
 };
 
@@ -1607,6 +1621,8 @@ export default function EggSalesPWA() {
   const [clientKennelCalendarMonth, setClientKennelCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
   const [kennelCalendarMonth, setKennelCalendarMonth] = useState(getLocalIsoDate().slice(0, 7));
   const [kennelBookingForm, setKennelBookingForm] = useState(emptyKennelBookingForm);
+  const [additionalKennelDogs, setAdditionalKennelDogs] = useState([]);
+  const [isSubmittingKennelBooking, setIsSubmittingKennelBooking] = useState(false);
   const [adminKennelBookingForm, setAdminKennelBookingForm] = useState(emptyAdminKennelBookingForm);
   const [kennelBlockedDates, setKennelBlockedDates] = useState([]);
   const [kennelBlockedDateForm, setKennelBlockedDateForm] = useState(emptyKennelBlockedDateForm);
@@ -7525,14 +7541,46 @@ async function createAdminKennelBooking(event) {
   async function requestKennelBooking(event) {
     event.preventDefault();
 
+    if (isSubmittingKennelBooking) {
+      return;
+    }
+
     if (!currentUser || !isLogged) {
       showToast("Connectez-vous pour demander une réservation.");
       setScreen("login");
       return;
     }
 
-    if (!kennelBookingForm.startDate || !kennelBookingForm.endDate || !kennelBookingForm.arrivalTime || !kennelBookingForm.departureTime || !kennelBookingForm.dogName.trim() || !kennelBookingForm.ownerInsurance.trim() || !kennelBookingForm.veterinarianName.trim()) {
-      showToast("Indiquez les dates, les heures, le nom du chien, l'assurance et le vétérinaire habituel.");
+    if (!kennelBookingForm.startDate || !kennelBookingForm.endDate || !kennelBookingForm.arrivalTime || !kennelBookingForm.departureTime || !kennelBookingForm.ownerInsurance.trim() || !kennelBookingForm.veterinarianName.trim()) {
+      showToast("Indiquez les dates, les heures, l'assurance et le vétérinaire habituel.");
+      return;
+    }
+
+    const requestedDogs = [
+      {
+        dogName: kennelBookingForm.dogName,
+        dogPhotoUrl: kennelBookingForm.dogPhotoUrl,
+        dogBreed: kennelBookingForm.dogBreed,
+        dogBirthYear: kennelBookingForm.dogBirthYear,
+        dogSex: kennelBookingForm.dogSex,
+        dogMicrochipNumber: kennelBookingForm.dogMicrochipNumber,
+        dogNotMicrochipped: kennelBookingForm.dogNotMicrochipped,
+        vaccinesUpToDate: kennelBookingForm.vaccinesUpToDate,
+        sterilized: kennelBookingForm.sterilized,
+        notes: kennelBookingForm.notes,
+      },
+      ...additionalKennelDogs,
+    ];
+    const dogValidation = validateKennelBookingDogs(requestedDogs);
+
+    if (!dogValidation.valid) {
+      if (dogValidation.code === "too_many_dogs") {
+        showToast("Une demande client peut contenir au maximum 4 chiens.");
+      } else if (dogValidation.code === "missing_microchip") {
+        showToast(`Indiquez le numéro de puce du chien ${Number(dogValidation.index || 0) + 1} ou cochez chien non pucé.`);
+      } else {
+        showToast(`Indiquez le nom du chien ${Number(dogValidation.index || 0) + 1}.`);
+      }
       return;
     }
 
@@ -7548,15 +7596,76 @@ async function createAdminKennelBooking(event) {
       return;
     }
 
-    if (!kennelBookingForm.dogNotMicrochipped && !kennelBookingForm.dogMicrochipNumber.trim()) {
-      showToast("Indiquez le numero de puce du chien ou cochez chien non puce.");
-      return;
-    }
-
     if (!kennelBookingForm.photoConsent) {
       showToast("Indiquez si vous autorisez ou refusez l'utilisation des photos et vidéos de votre chien.");
       return;
     }
+
+    if (requestedDogs.length > 1) {
+      setIsSubmittingKennelBooking(true);
+      const { data: insertedBookings, error: multiBookingError } = await supabase.rpc(
+        "create_client_multi_dog_kennel_booking",
+        {
+          p_start_date: kennelBookingForm.startDate,
+          p_end_date: kennelBookingForm.endDate,
+          p_arrival_time: kennelBookingForm.arrivalTime,
+          p_departure_time: kennelBookingForm.departureTime,
+          p_client_name: name || currentUser.email,
+          p_client_email: currentUser.email,
+          p_phone: kennelBookingForm.phone.trim(),
+          p_client_insurance: kennelBookingForm.ownerInsurance.trim(),
+          p_photo_consent: kennelBookingForm.photoConsent === "yes",
+          p_amount_confirmed: selectedKennelEstimatedAmount > 0 ? Number(selectedKennelEstimatedAmount.toFixed(2)) : null,
+          p_notes: kennelBookingForm.notes.trim(),
+          p_dogs: requestedDogs.map((dog) => ({
+            name: dog.dogName.trim(),
+            photoUrl: normalizeImageUrl(dog.dogPhotoUrl),
+            breed: dog.dogBreed.trim(),
+            birthYear: dog.dogBirthYear ? Number(dog.dogBirthYear) : null,
+            sex: dog.dogSex,
+            microchipNumber: dog.dogNotMicrochipped ? "" : dog.dogMicrochipNumber.trim(),
+            notMicrochipped: dog.dogNotMicrochipped,
+            vaccinesUpToDate: dog.vaccinesUpToDate,
+            sterilized: dog.sterilized,
+            veterinarianName: kennelBookingForm.veterinarianName.trim(),
+            notes: dog.notes.trim(),
+          })),
+        },
+      );
+      setIsSubmittingKennelBooking(false);
+
+      if (multiBookingError) {
+        const errorMessage = String(multiBookingError.message || "");
+        if (errorMessage.includes("create_client_multi_dog_kennel_booking")) {
+          showToast("Appliquez la migration Supabase des réservations pension multi-chiens, puis recommencez.");
+        } else if (errorMessage.includes("kennel_night_full")) {
+          showToast("Il ne reste pas assez de places pour tous les chiens sur cette période.");
+        } else if (errorMessage.includes("kennel_night_closed")) {
+          showToast("La pension est fermée sur au moins une journée demandée. Choisissez d'autres dates.");
+        } else {
+          showToast("Impossible d'enregistrer la demande pour les chiens : " + multiBookingError.message);
+        }
+        return;
+      }
+
+      const dogNames = requestedDogs.map((dog) => dog.dogName.trim()).join(", ");
+      setKennelBookingForm(emptyKennelBookingForm);
+      setAdditionalKennelDogs([]);
+      await loadKennelAvailability(clientKennelCalendarMonth);
+      await Promise.all(
+        (insertedBookings || []).map((booking) => notifyAdminsAboutKennelBooking(booking.booking_id)),
+      );
+      setClientReservationConfirmation({
+        type: "kennel",
+        title: "Demandes pension envoyées",
+        message: `Les demandes pour ${dogNames} sont bien enregistrées. Chaque chien dispose de son propre suivi.`,
+        whatsappMessage: `Bonjour, je viens d'envoyer une demande de séjour en pension canine du ${formatDeliveryDate(kennelBookingForm.startDate)} au ${formatDeliveryDate(kennelBookingForm.endDate)} pour ${dogNames}. Je souhaite ajouter une précision.`,
+      });
+      showToast(`${requestedDogs.length} demandes de pension envoyées pour ${dogNames}.`);
+      return;
+    }
+
+    setIsSubmittingKennelBooking(true);
 
     const { data: dog, error: dogError } = await supabase
       .from("dogs")
@@ -7578,6 +7687,7 @@ async function createAdminKennelBooking(event) {
       .single();
 
     if (dogError) {
+      setIsSubmittingKennelBooking(false);
       showToast("Impossible d'enregistrer la fiche chien : " + dogError.message);
       return;
     }
@@ -7599,6 +7709,7 @@ async function createAdminKennelBooking(event) {
     }).select("id").single();
 
     if (error) {
+      setIsSubmittingKennelBooking(false);
       const { error: cleanupError } = await supabase
         .from("dogs")
         .delete()
@@ -7622,8 +7733,10 @@ async function createAdminKennelBooking(event) {
     }
 
     setKennelBookingForm(emptyKennelBookingForm);
+    setAdditionalKennelDogs([]);
     await loadKennelAvailability(clientKennelCalendarMonth);
     await notifyAdminsAboutKennelBooking(insertedKennelBooking?.id);
+    setIsSubmittingKennelBooking(false);
     setClientReservationConfirmation({
       type: "kennel",
       title: "Demande pension envoyee",
@@ -11178,6 +11291,8 @@ const selectedKennelBillableDays = getKennelBillableDays(
   kennelBookingForm.departureTime
 );
 const selectedKennelEstimatedAmount = selectedKennelBillableDays * Number(kennelDailyService?.price || 0);
+const selectedKennelDogCount = 1 + additionalKennelDogs.length;
+const selectedKennelEstimatedTotalAmount = selectedKennelEstimatedAmount * selectedKennelDogCount;
 const selectedAdminKennelBookingDays = getKennelBookingDays(adminKennelBookingForm.startDate, adminKennelBookingForm.endDate);
 const selectedAdminKennelBillableDays = getKennelBillableDays(
   adminKennelBookingForm.startDate,
@@ -16349,8 +16464,8 @@ function openTutorialFromPage(guideId) {
                       {selectedKennelBookingDays} jour{selectedKennelBookingDays > 1 ? "s" : ""} de présence
                     </strong>
                     <span>
-                      Montant estimé : {selectedKennelEstimatedAmount.toFixed(2)} EUR
-                      {kennelDailyService?.price ? ` (${Number(kennelDailyService.price).toFixed(2)} EUR / jour)` : ""}
+                      Montant estimé : {selectedKennelEstimatedTotalAmount.toFixed(2)} EUR pour {selectedKennelDogCount} chien{selectedKennelDogCount > 1 ? "s" : ""}
+                      {kennelDailyService?.price ? ` (${Number(kennelDailyService.price).toFixed(2)} EUR / jour / chien)` : ""}
                     </span>
                     <em>
                       Base facturée : {selectedKennelBillableDays.toLocaleString("fr-FR")} jour{selectedKennelBillableDays > 1 ? "s" : ""}.
@@ -16387,6 +16502,13 @@ function openTutorialFromPage(guideId) {
                     required
                   />
                 </label>
+
+                <div className="kennel-dog-form__heading">
+                  <div>
+                    <span>Fiche chien</span>
+                    <strong>Chien 1</strong>
+                  </div>
+                </div>
 
                 <div className="service-form__grid">
                   <label>
@@ -16486,9 +16608,142 @@ function openTutorialFromPage(guideId) {
                   </label>
                 </div>
 
+                {additionalKennelDogs.map((dog, dogIndex) => (
+                  <fieldset className="kennel-additional-dog" key={`additional-kennel-dog-${dogIndex}`}>
+                    <legend>Chien {dogIndex + 2}</legend>
+                    <button
+                      type="button"
+                      className="kennel-additional-dog__remove"
+                      onClick={() => setAdditionalKennelDogs((current) => current.filter((_, index) => index !== dogIndex))}
+                    >
+                      <Trash2 size={16} /> Retirer ce chien
+                    </button>
+
+                    <div className="service-form__grid">
+                      <label>
+                        <span>Nom du chien *</span>
+                        <input
+                          value={dog.dogName}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, dogName: event.target.value } : item))}
+                          placeholder="Nom"
+                          required
+                        />
+                      </label>
+                      <label>
+                        <span>Race</span>
+                        <input
+                          value={dog.dogBreed}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, dogBreed: event.target.value } : item))}
+                          placeholder="Race ou croisé"
+                        />
+                      </label>
+                      <label>
+                        <span>Photo du chien</span>
+                        <input
+                          value={dog.dogPhotoUrl}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, dogPhotoUrl: event.target.value } : item))}
+                          placeholder="Lien d'une photo, facultatif"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="service-form__grid">
+                      <label>
+                        <span>Année de naissance</span>
+                        <input
+                          type="number"
+                          min="1990"
+                          max={new Date().getFullYear()}
+                          value={dog.dogBirthYear}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, dogBirthYear: event.target.value } : item))}
+                          placeholder="Ex. 2020"
+                        />
+                      </label>
+                      <label>
+                        <span>Sexe</span>
+                        <select
+                          value={dog.dogSex}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, dogSex: event.target.value } : item))}
+                        >
+                          <option value="">Non renseigné</option>
+                          <option>Femelle</option>
+                          <option>Mâle</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="service-form__grid">
+                      <label>
+                        <span>Numéro de puce *</span>
+                        <input
+                          value={dog.dogMicrochipNumber}
+                          disabled={dog.dogNotMicrochipped}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, dogMicrochipNumber: event.target.value } : item))}
+                          placeholder="Ex. 250269..."
+                        />
+                      </label>
+                      <label className="service-checkbox service-checkbox--inline">
+                        <input
+                          type="checkbox"
+                          checked={dog.dogNotMicrochipped}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? {
+                            ...item,
+                            dogNotMicrochipped: event.target.checked,
+                            dogMicrochipNumber: event.target.checked ? "" : item.dogMicrochipNumber,
+                          } : item))}
+                        />
+                        <span>Le chien n'est pas pucé</span>
+                      </label>
+                    </div>
+
+                    <div className="service-checkbox-grid">
+                      <label className="service-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={dog.vaccinesUpToDate}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, vaccinesUpToDate: event.target.checked } : item))}
+                        />
+                        <span>Vaccins à jour</span>
+                      </label>
+                      <label className="service-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={dog.sterilized}
+                          onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, sterilized: event.target.checked } : item))}
+                        />
+                        <span>Chien stérilisé</span>
+                      </label>
+                    </div>
+
+                    <label>
+                      <span>Habitudes et précisions pour ce chien</span>
+                      <textarea
+                        value={dog.notes}
+                        onChange={(event) => setAdditionalKennelDogs((current) => current.map((item, index) => index === dogIndex ? { ...item, notes: event.target.value } : item))}
+                        placeholder="Alimentation, traitement, comportement..."
+                        rows="3"
+                      />
+                    </label>
+                  </fieldset>
+                ))}
+
+                {additionalKennelDogs.length < 3 && (
+                  <button
+                    type="button"
+                    className="kennel-add-dog-button"
+                    onClick={() => setAdditionalKennelDogs((current) => [...current, { ...emptyAdditionalKennelDog }])}
+                  >
+                    <Plus size={18} /> Ajouter un autre chien
+                  </button>
+                )}
+
+                {additionalKennelDogs.length === 3 && (
+                  <p className="kennel-dog-limit">Maximum de 4 chiens par demande client.</p>
+                )}
+
                 <fieldset className="kennel-photo-consent">
-                  <legend>Photos et vidéos du chien *</legend>
-                  <p>Choisissez si vous autorisez la pension à publier des photos ou vidéos de votre chien sur son site et ses réseaux sociaux.</p>
+                  <legend>Photos et vidéos {selectedKennelDogCount > 1 ? "des chiens" : "du chien"} *</legend>
+                  <p>Choisissez si vous autorisez la pension à publier des photos ou vidéos {selectedKennelDogCount > 1 ? "de vos chiens" : "de votre chien"} sur son site et ses réseaux sociaux.</p>
                   <label className="service-checkbox">
                     <input
                       type="radio"
@@ -16519,8 +16774,10 @@ function openTutorialFromPage(guideId) {
                   />
                 </label>
 
-                <button type="submit" className="primary-action">
-                  Envoyer la demande
+                <button type="submit" className="primary-action" disabled={isSubmittingKennelBooking}>
+                  {isSubmittingKennelBooking
+                    ? "Enregistrement..."
+                    : `Envoyer ${selectedKennelDogCount > 1 ? `les ${selectedKennelDogCount} demandes` : "la demande"}`}
                 </button>
               </form>
               </>

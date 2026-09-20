@@ -24,6 +24,7 @@ import {
   isProductQuantityAvailable,
   isRecordLinkedToClient,
   isTreasureHuntActivity,
+  validateKennelBookingDogs,
 } from "../src/domainRules.js";
 
 test("toutes les commandes sont chargées même lorsque Supabase limite chaque réponse", async () => {
@@ -71,6 +72,30 @@ test("les demi-journées d'arrivée et de départ sont prises en compte", () => 
 test("des dates pension invalides ne produisent aucun jour facturé", () => {
   assert.equal(getKennelBillableDays("2026-09-22", "2026-09-20"), 0);
   assert.equal(getKennelBillableDays("", "2026-09-20"), 0);
+});
+
+test("une demande pension accepte plusieurs chiens correctement renseignés", () => {
+  assert.deepEqual(
+    validateKennelBookingDogs([
+      { dogName: "Sakura", dogMicrochipNumber: "250001", dogNotMicrochipped: false },
+      { dogName: "Nala", dogMicrochipNumber: "", dogNotMicrochipped: true },
+    ]),
+    { valid: true, code: "ok" },
+  );
+});
+
+test("une demande pension refuse un chien incomplet ou plus de quatre chiens", () => {
+  assert.deepEqual(
+    validateKennelBookingDogs([{ dogName: "Sakura", dogMicrochipNumber: "", dogNotMicrochipped: false }]),
+    { valid: false, code: "missing_microchip", index: 0 },
+  );
+  assert.equal(
+    validateKennelBookingDogs(Array.from({ length: 5 }, (_, index) => ({
+      dogName: `Chien ${index + 1}`,
+      dogNotMicrochipped: true,
+    }))).code,
+    "too_many_dogs",
+  );
 });
 
 test("la signature anti-doublon ne dépend pas de l'ordre des produits", () => {

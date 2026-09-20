@@ -28,6 +28,30 @@ export function getKennelBookingDays(startDate, endDate) {
   return getKennelCalendarStayDates(startDate, endDate).length;
 }
 
+export function validateKennelBookingDogs(dogs, maxDogs = 4) {
+  if (!Array.isArray(dogs) || dogs.length === 0) {
+    return { valid: false, code: "missing_dog" };
+  }
+
+  if (dogs.length > maxDogs) {
+    return { valid: false, code: "too_many_dogs" };
+  }
+
+  const missingNameIndex = dogs.findIndex((dog) => !String(dog?.dogName || "").trim());
+  if (missingNameIndex >= 0) {
+    return { valid: false, code: "missing_name", index: missingNameIndex };
+  }
+
+  const missingMicrochipIndex = dogs.findIndex(
+    (dog) => !dog?.dogNotMicrochipped && !String(dog?.dogMicrochipNumber || "").trim(),
+  );
+  if (missingMicrochipIndex >= 0) {
+    return { valid: false, code: "missing_microchip", index: missingMicrochipIndex };
+  }
+
+  return { valid: true, code: "ok" };
+}
+
 export function getKennelBillableDays(startDate, endDate, arrivalTime = "09:00", departureTime = "18:00") {
   const calendarDays = getKennelBookingDays(startDate, endDate);
 
