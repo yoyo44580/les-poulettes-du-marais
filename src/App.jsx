@@ -7,15 +7,23 @@ import {
   getKennelBillableDays,
   getKennelCalendarStayDates,
   getCappedProductQuantity,
+  getBookingPaymentSummary,
+  getClientBillingDocuments,
   getClientOrderCancelInfo,
   getClientOrderMaxDeliveryDate,
   getOrderDuplicateSignature,
   getOrderDuplicateSignatureFromItems,
   getOrderItems,
   getReservationTrackingSteps,
+  getUnreadAdminReplies,
+  getUnsignedConfirmedKennelBookings,
   hasDuplicateEducationBooking,
   isActiveReservationStatus,
   isClientDeliveryDateAllowed,
+  isContactMessageArchived,
+  isKennelContractReminderDue,
+  isKennelPaymentOverdue,
+  isRecordLinkedToClient,
   isPaidAccompanistEducationActivity,
   isProductQuantityAvailable,
   isTreasureHuntActivity,
@@ -10678,27 +10686,13 @@ const selectedClientMessages = selectedClientProfile
       );
     })
   : [];
-const selectedClientBillingDocuments = selectedClientProfile
-  ? billingDocuments.filter((document) => {
-      const documentUserId = String(document.user_id || "");
-      const snapshotEmail = String(document.customer_snapshot?.email || "").trim().toLowerCase();
-      const snapshotPhone = getSmsPhoneNumber(document.customer_snapshot?.phone);
-      const sourceType = String(document.source_type || "");
-      const sourceId = String(document.source_id || "");
-      const linkedSourceIds = new Set([
-        ...selectedClientOrders.map((order) => `order:${String(order.id)}`),
-        ...selectedClientEducationBookings.map((booking) => `education:${String(booking.id)}`),
-        ...selectedClientKennelBookings.map((booking) => `kennel:${String(booking.id)}`),
-      ]);
-
-      return (
-        (documentUserId && documentUserId === selectedClientProfile.id) ||
-        (sourceType && sourceId && linkedSourceIds.has(`${sourceType}:${sourceId}`)) ||
-        (selectedClientEmail && snapshotEmail === selectedClientEmail) ||
-        (selectedClientPhone && snapshotPhone === selectedClientPhone)
-      );
-    })
-  : [];
+const selectedClientBillingDocuments = getClientBillingDocuments({
+  documents: billingDocuments,
+  profile: selectedClientProfile,
+  orders: selectedClientOrders,
+  educationBookings: selectedClientEducationBookings,
+  kennelBookings: selectedClientKennelBookings,
+});
 const selectedClientTimeline = selectedClientProfile
   ? [
       {
@@ -11126,21 +11120,18 @@ const clientAccountProfile = clientAccountEmail
   : null;
 const clientAccountEducationBookings = clientAccountEmail
   ? educationBookings
-      .filter((booking) => String(booking.client_email || "").trim().toLowerCase() === clientAccountEmail)
+      .filter((booking) => isRecordLinkedToClient(booking, currentUser?.id, clientAccountEmail))
       .sort((a, b) => String(b.booking_date || "").localeCompare(String(a.booking_date || "")))
   : [];
 const clientAccountKennelBookings = clientAccountEmail
   ? kennelBookings
-      .filter((booking) => String(booking.client_email || "").trim().toLowerCase() === clientAccountEmail)
+      .filter((booking) => isRecordLinkedToClient(booking, currentUser?.id, clientAccountEmail))
       .sort((a, b) => String(b.start_date || "").localeCompare(String(a.start_date || "")))
   : [];
-const kennelContractReminderLimitDate = addLocalDays(todayIso, 7);
-const unsignedConfirmedKennelBookings = clientAccountKennelBookings.filter(
-  (booking) =>
-    String(booking.status || "").trim().toLowerCase().startsWith("confirm") &&
-    String(booking.start_date || "") >= todayIso &&
-    String(booking.start_date || "") <= kennelContractReminderLimitDate &&
-    !kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id))
+const unsignedConfirmedKennelBookings = getUnsignedConfirmedKennelBookings(
+  clientAccountKennelBookings,
+  kennelContracts,
+  todayIso,
 );
 const nextUnsignedKennelBooking = unsignedConfirmedKennelBookings[0] || null;
 const clientAccountOccasionalSales = myOccasionalSaleReservations;
@@ -11369,8 +11360,6 @@ const todayEducationBookings = educationBookings
       !["Annulée", "Terminée"].includes(booking.status || "")
   )
   .sort((a, b) => String(a.activity_type || "").localeCompare(String(b.activity_type || "")));
-const isContactMessageArchived = (message) =>
-  Boolean(message.archived_at) || normalizeStatusKeyword(message.status || "") === "traite";
 const activeContactMessages = contactMessages.filter((message) => !isContactMessageArchived(message));
 const archivedContactMessages = contactMessages.filter((message) => isContactMessageArchived(message));
 const visibleContactMessages =
@@ -11383,18 +11372,13 @@ const clientMessagesSeenAt = currentUser?.id
   ? clientMessagesSeenAtByUser[currentUser.id] ||
     (canUseBrowser ? localStorage.getItem(getClientMessagesSeenStorageKey(currentUser.id)) || "" : "")
   : "";
-const clientAdminReplies = currentUser?.id
-  ? contactMessageReplies.filter(
-      (reply) => reply.sender_role === "admin" && clientContactMessageIds.has(reply.contact_message_id)
-    )
-  : [];
-const clientUnreadAdminReplies = clientAdminReplies.filter(
-  (reply) => !reply.client_read_at && (!clientMessagesSeenAt || String(reply.created_at || "") > clientMessagesSeenAt)
+const clientUnreadAdminReplies = getUnreadAdminReplies(
+  contactMessageReplies,
+  clientContactMessageIds,
+  clientMessagesSeenAt,
 );
 const clientUnreadAdminReplyCount = clientUnreadAdminReplies.length;
-const latestClientUnreadReply = [...clientUnreadAdminReplies].sort(
-  (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-)[0];
+const latestClientUnreadReply = clientUnreadAdminReplies[0];
 const clientReadyOrders = myOrders
   .filter((order) => {
     const status = normalizeStatusKeyword(normalizeOrderStatus(order.status || ""));
@@ -11797,15 +11781,11 @@ const openEducationBookings = educationBookings.filter(
   (booking) => !booking.archived_at && !String(booking.status || "").toLowerCase().startsWith("annul")
 );
 const openKennelBookings = activeKennelBookings.filter((booking) => String(booking.end_date || "") >= todayIso);
-const unsignedAdminKennelContractBookings = openKennelBookings
-  .filter(
-    (booking) =>
-      String(booking.status || "").trim().toLowerCase().startsWith("confirm") &&
-      String(booking.start_date || "") >= todayIso &&
-      String(booking.start_date || "") <= kennelContractReminderLimitDate &&
-      !kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id))
-  )
-  .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
+const unsignedAdminKennelContractBookings = getUnsignedConfirmedKennelBookings(
+  openKennelBookings,
+  kennelContracts,
+  todayIso,
+);
 const kennelAdminAttentionCount = pendingKennelRequestsCount + unsignedAdminKennelContractBookings.length;
 const kennelPaymentTrackingStartDate = "2026-06-01";
 const kennelPaymentTrackedBookings = kennelBookings.filter(
@@ -11813,8 +11793,6 @@ const kennelPaymentTrackedBookings = kennelBookings.filter(
     !String(booking.status || "").toLowerCase().startsWith("annul") &&
     String(booking.start_date || booking.end_date || "") >= kennelPaymentTrackingStartDate
 );
-const hasKennelStayEnded = (booking) =>
-  String(booking.end_date || booking.start_date || "") < todayIso;
 const reservationsMissingPhone = [
   ...openEducationBookings
     .filter((booking) => !String(booking.phone || "").trim())
@@ -11853,12 +11831,10 @@ const educationBookingsMissingPayment = openEducationBookings
   .filter((booking) => hasMissingBookingPayment(booking, getEducationBookingAmount(booking)))
   .slice(0, 6);
 const kennelBookingsMissingPayment = kennelPaymentTrackedBookings
-  .filter(hasKennelStayEnded)
-  .filter((booking) => hasMissingBookingPayment(booking, getKennelBookingAmount(booking)))
+  .filter((booking) => isKennelPaymentOverdue(booking, getKennelBookingAmount(booking), todayIso))
   .slice(0, 6);
 const kennelPaymentFollowups = kennelPaymentTrackedBookings
-  .filter(hasKennelStayEnded)
-  .filter((booking) => hasMissingBookingPayment(booking, getKennelBookingAmount(booking)))
+  .filter((booking) => isKennelPaymentOverdue(booking, getKennelBookingAmount(booking), todayIso))
   .map((booking) => {
     const amount = getKennelBookingAmount(booking);
     const payment = getBookingPaymentSummary(booking, amount);
@@ -11891,7 +11867,7 @@ const kennelPaymentRows = kennelPaymentTrackedBookings
       amount,
       payment,
       remaining: payment.remaining,
-      isMissing: hasKennelStayEnded(booking) && hasMissingBookingPayment(booking, amount),
+      isMissing: isKennelPaymentOverdue(booking, amount, todayIso),
     };
   })
   .sort((a, b) => {
@@ -12864,24 +12840,6 @@ function getKennelBookingTimeLabel(booking) {
   }
 
   return `Arrivée ${arrivalTime || "?"} - départ ${departureTime || "?"}`;
-}
-
-function getBookingPaymentSummary(booking, amount) {
-  const deposit = Number(booking.deposit_amount || 0);
-  const received = booking.payment_received === true;
-  const paidAmount = received ? amount : Math.min(deposit, amount);
-  const remaining = Math.max(0, amount - paidAmount);
-  const method = booking.payment_method || "Non renseigné";
-
-  return {
-    deposit,
-    received,
-    paidAmount,
-    remaining,
-    method,
-    label: received ? "Paiement reçu" : deposit > 0 ? "Acompte payé" : "Paiement à suivre",
-    tone: received ? "paid" : deposit > 0 ? "partial" : "missing",
-  };
 }
 
 function parseAccountingAmount(value) {
@@ -24805,9 +24763,7 @@ function openTutorialFromPage(guideId) {
                         >
                           {kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id)) ? "Voir le contrat signé" : "Aperçu du contrat"}
                         </button>
-                        {!kennelContracts.some((contract) => String(contract.booking_id) === String(booking.id)) &&
-                          String(booking.start_date || "") >= todayIso &&
-                          String(booking.start_date || "") <= kennelContractReminderLimitDate && (
+                        {isKennelContractReminderDue(booking, kennelContracts, todayIso) && (
                           <button
                             type="button"
                             className="admin-contract-reminder-button"

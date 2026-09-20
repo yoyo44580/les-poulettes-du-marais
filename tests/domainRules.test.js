@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getActiveEducationParticipantCount,
+  getBookingPaymentSummary,
   getCappedProductQuantity,
+  getClientBillingDocuments,
   getClientOrderCancelInfo,
   getClientOrderMaxDeliveryDate,
   getKennelBillableDays,
@@ -10,10 +12,16 @@ import {
   getOrderDuplicateSignature,
   getOrderDuplicateSignatureFromItems,
   getReservationTrackingSteps,
+  getUnreadAdminReplies,
+  getUnsignedConfirmedKennelBookings,
   hasDuplicateEducationBooking,
   isClientDeliveryDateAllowed,
+  isContactMessageArchived,
+  isKennelContractReminderDue,
+  isKennelPaymentOverdue,
   isPaidAccompanistEducationActivity,
   isProductQuantityAvailable,
+  isRecordLinkedToClient,
   isTreasureHuntActivity,
 } from "../src/domainRules.js";
 
@@ -178,4 +186,122 @@ test("les réservations annulées libèrent les places du créneau ferme", () =>
   ];
 
   assert.equal(getActiveEducationParticipantCount(bookings), 6);
+});
+
+test("une facture est rattachée directement au bon compte client", () => {
+  const documents = [
+    { id: "invoice-1", user_id: "client-1", source_type: "kennel", source_id: "stay-1" },
+    { id: "invoice-2", user_id: "client-2", source_type: "kennel", source_id: "stay-2" },
+  ];
+
+  assert.deepEqual(getClientBillingDocuments({
+    documents,
+    profile: { id: "client-1", email: "client@example.com", phone: "06 11 22 33 44" },
+  }).map((document) => document.id), ["invoice-1"]);
+});
+
+test("une facture de réservation manuelle reste visible grâce à sa source", () => {
+  const documents = [{
+    id: "invoice-sakura",
+    user_id: "admin-id",
+    source_type: "kennel",
+    source_id: "stay-sakura",
+    customer_snapshot: { email: "", phone: "" },
+  }];
+
+  assert.deepEqual(getClientBillingDocuments({
+    documents,
+    profile: { id: "client-1", email: "sakura@example.com", phone: "0611223344" },
+    kennelBookings: [{ id: "stay-sakura" }],
+  }).map((document) => document.id), ["invoice-sakura"]);
+});
+
+test("une réservation manuelle reste visible grâce à l'identifiant du compte", () => {
+  const manualBooking = {
+    user_id: "client-1",
+    client_email: "ancienne-adresse@example.com",
+  };
+
+  assert.equal(isRecordLinkedToClient(manualBooking, "client-1", "nouvelle-adresse@example.com"), true);
+  assert.equal(isRecordLinkedToClient(manualBooking, "client-2", "nouvelle-adresse@example.com"), false);
+});
+
+test("des coordonnées vides ne rattachent jamais la facture d'un autre client", () => {
+  const documents = [{
+    id: "invoice-other",
+    user_id: "client-2",
+    source_type: "order",
+    source_id: "order-2",
+    customer_snapshot: { email: "", phone: "" },
+  }];
+
+  assert.deepEqual(getClientBillingDocuments({
+    documents,
+    profile: { id: "client-1", email: "", phone: "" },
+  }), []);
+});
+
+test("seuls les contrats confirmés des sept prochains jours sont à relancer", () => {
+  const bookings = [
+    { id: "today", status: "Confirmée", start_date: "2026-09-20" },
+    { id: "day-seven", status: "Confirmée", start_date: "2026-09-27" },
+    { id: "day-eight", status: "Confirmée", start_date: "2026-09-28" },
+    { id: "requested", status: "Demandée", start_date: "2026-09-22" },
+    { id: "cancelled", status: "Annulée", start_date: "2026-09-22" },
+  ];
+
+  assert.deepEqual(
+    getUnsignedConfirmedKennelBookings(bookings, [], "2026-09-20").map((booking) => booking.id),
+    ["today", "day-seven"],
+  );
+});
+
+test("un contrat signé retire immédiatement la relance", () => {
+  const booking = { id: "stay-1", status: "Confirmée", start_date: "2026-09-23" };
+
+  assert.equal(isKennelContractReminderDue(booking, [], "2026-09-20"), true);
+  assert.equal(isKennelContractReminderDue(booking, [{ booking_id: "stay-1" }], "2026-09-20"), false);
+});
+
+test("seul un séjour confirmé terminé et non payé est en retard", () => {
+  const baseBooking = {
+    status: "Confirmée",
+    start_date: "2026-09-10",
+    end_date: "2026-09-12",
+    payment_received: false,
+  };
+
+  assert.equal(isKennelPaymentOverdue(baseBooking, 100, "2026-09-20"), true);
+  assert.equal(isKennelPaymentOverdue({ ...baseBooking, end_date: "2026-09-21" }, 100, "2026-09-20"), false);
+  assert.equal(isKennelPaymentOverdue({ ...baseBooking, payment_received: true }, 100, "2026-09-20"), false);
+  assert.equal(isKennelPaymentOverdue({ ...baseBooking, status: "Annulée" }, 100, "2026-09-20"), false);
+  assert.equal(isKennelPaymentOverdue({ ...baseBooking, status: "Demandée" }, 100, "2026-09-20"), false);
+  assert.equal(isKennelPaymentOverdue({ ...baseBooking, archived_at: "2026-09-19" }, 100, "2026-09-20"), false);
+});
+
+test("le reste à payer tient compte de l'acompte et du paiement reçu", () => {
+  assert.equal(getBookingPaymentSummary({ deposit_amount: 30 }, 100).remaining, 70);
+  assert.equal(getBookingPaymentSummary({ deposit_amount: 30, payment_received: true }, 100).remaining, 0);
+  assert.equal(getBookingPaymentSummary({ deposit_amount: 150 }, 100).remaining, 0);
+});
+
+test("seules les réponses admin liées et réellement non lues déclenchent un badge", () => {
+  const replies = [
+    { id: "new", contact_message_id: "message-1", sender_role: "admin", created_at: "2026-09-20T10:00:00Z", client_read_at: null },
+    { id: "old", contact_message_id: "message-1", sender_role: "admin", created_at: "2026-09-20T08:00:00Z", client_read_at: null },
+    { id: "read", contact_message_id: "message-1", sender_role: "admin", created_at: "2026-09-20T11:00:00Z", client_read_at: "2026-09-20T11:05:00Z" },
+    { id: "client", contact_message_id: "message-1", sender_role: "client", created_at: "2026-09-20T12:00:00Z", client_read_at: null },
+    { id: "other", contact_message_id: "message-2", sender_role: "admin", created_at: "2026-09-20T12:00:00Z", client_read_at: null },
+  ];
+
+  assert.deepEqual(
+    getUnreadAdminReplies(replies, ["message-1"], "2026-09-20T09:00:00Z").map((reply) => reply.id),
+    ["new"],
+  );
+});
+
+test("un message traité ou archivé quitte bien la liste active", () => {
+  assert.equal(isContactMessageArchived({ status: "Traité" }), true);
+  assert.equal(isContactMessageArchived({ status: "Nouveau", archived_at: "2026-09-20T10:00:00Z" }), true);
+  assert.equal(isContactMessageArchived({ status: "Nouveau", archived_at: null }), false);
 });

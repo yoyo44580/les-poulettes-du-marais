@@ -172,6 +172,145 @@ export function getActiveEducationParticipantCount(bookings) {
     .reduce((sum, booking) => sum + Number(booking.participants || 0), 0);
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function isRecordLinkedToClient(record, userId, email) {
+  const recordUserId = String(record?.user_id || "");
+  const clientUserId = String(userId || "");
+  const recordEmail = normalizeEmail(record?.client_email || record?.email);
+  const clientEmail = normalizeEmail(email);
+
+  return (
+    (clientUserId && recordUserId === clientUserId) ||
+    (clientEmail && recordEmail === clientEmail)
+  );
+}
+
+function normalizePhone(value) {
+  return String(value || "").replace(/[^\d+]/g, "");
+}
+
+export function getClientBillingDocuments({
+  documents = [],
+  profile,
+  orders = [],
+  educationBookings = [],
+  kennelBookings = [],
+}) {
+  if (!profile) return [];
+
+  const profileId = String(profile.id || "");
+  const profileEmail = normalizeEmail(profile.email);
+  const profilePhone = normalizePhone(profile.phone);
+  const linkedSourceIds = new Set([
+    ...orders.map((order) => `order:${String(order.id)}`),
+    ...educationBookings.map((booking) => `education:${String(booking.id)}`),
+    ...kennelBookings.map((booking) => `kennel:${String(booking.id)}`),
+  ]);
+
+  return documents.filter((document) => {
+    const documentUserId = String(document.user_id || "");
+    const snapshotEmail = normalizeEmail(document.customer_snapshot?.email);
+    const snapshotPhone = normalizePhone(document.customer_snapshot?.phone);
+    const sourceKey = `${String(document.source_type || "")}:${String(document.source_id || "")}`;
+
+    return (
+      (profileId && documentUserId === profileId) ||
+      linkedSourceIds.has(sourceKey) ||
+      (profileEmail && snapshotEmail === profileEmail) ||
+      (profilePhone && snapshotPhone === profilePhone)
+    );
+  });
+}
+
+export function getUnsignedConfirmedKennelBookings(
+  bookings,
+  contracts,
+  todayIso,
+  reminderDays = 7,
+) {
+  const limitDate = getClientOrderMaxDeliveryDate(todayIso, reminderDays);
+  const signedBookingIds = new Set((contracts || []).map((contract) => String(contract.booking_id)));
+
+  return (bookings || [])
+    .filter((booking) => {
+      const status = normalizeStatusKeyword(booking.status);
+      const startDate = String(booking.start_date || "");
+
+      return (
+        status.startsWith("confirm") &&
+        startDate >= todayIso &&
+        startDate <= limitDate &&
+        !signedBookingIds.has(String(booking.id))
+      );
+    })
+    .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
+}
+
+export function isKennelContractReminderDue(booking, contracts, todayIso, reminderDays = 7) {
+  return getUnsignedConfirmedKennelBookings(
+    booking ? [booking] : [],
+    contracts,
+    todayIso,
+    reminderDays,
+  ).length > 0;
+}
+
+export function getBookingPaymentSummary(booking, amount) {
+  const safeAmount = Math.max(0, Number(amount) || 0);
+  const deposit = Math.max(0, Number(booking?.deposit_amount) || 0);
+  const received = booking?.payment_received === true;
+  const paidAmount = received ? safeAmount : Math.min(deposit, safeAmount);
+  const remaining = Math.max(0, safeAmount - paidAmount);
+  const method = booking?.payment_method || "Non renseigné";
+
+  return {
+    deposit,
+    received,
+    paidAmount,
+    remaining,
+    method,
+    label: received ? "Paiement reçu" : deposit > 0 ? "Acompte payé" : "Paiement à suivre",
+    tone: received ? "paid" : deposit > 0 ? "partial" : "missing",
+  };
+}
+
+export function isKennelPaymentOverdue(booking, amount, todayIso) {
+  const status = normalizeStatusKeyword(booking?.status);
+  const endDate = String(booking?.end_date || booking?.start_date || "");
+
+  return (
+    !booking?.archived_at &&
+    (status.startsWith("confirm") || status.startsWith("termine")) &&
+    !status.startsWith("annul") &&
+    Number(amount || 0) > 0 &&
+    booking?.payment_received !== true &&
+    Boolean(endDate) &&
+    endDate < todayIso
+  );
+}
+
+export function isContactMessageArchived(message) {
+  return Boolean(message?.archived_at) || normalizeStatusKeyword(message?.status) === "traite";
+}
+
+export function getUnreadAdminReplies(replies, contactMessageIds, clientMessagesSeenAt = "") {
+  const messageIds = contactMessageIds instanceof Set
+    ? contactMessageIds
+    : new Set(contactMessageIds || []);
+
+  return (replies || [])
+    .filter((reply) =>
+      reply.sender_role === "admin" &&
+      messageIds.has(reply.contact_message_id) &&
+      !reply.client_read_at &&
+      (!clientMessagesSeenAt || String(reply.created_at || "") > clientMessagesSeenAt)
+    )
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+}
+
 export function getOrderItems(order) {
   if (Array.isArray(order?.items) && order.items.length > 0) {
     return order.items;
