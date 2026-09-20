@@ -8,6 +8,7 @@ import {
   getClientBillingDocuments,
   getClientOrderCancelInfo,
   getClientOrderMaxDeliveryDate,
+  getKennelMultiDogPricing,
   getKennelBillableDays,
   getKennelCalendarStayDates,
   getOrderDuplicateSignature,
@@ -96,6 +97,22 @@ test("une demande pension refuse un chien incomplet ou plus de quatre chiens", (
     }))).code,
     "too_many_dogs",
   );
+});
+
+test("le deuxième chien bénéficie automatiquement de dix pour cent de remise", () => {
+  assert.deepEqual(getKennelMultiDogPricing(100, 2), {
+    unitAmount: 100,
+    dogCount: 2,
+    secondDogDiscount: 10,
+    perDogAmounts: [100, 90],
+    total: 190,
+  });
+  assert.deepEqual(getKennelMultiDogPricing(100, 3).perDogAmounts, [100, 90, 100]);
+});
+
+test("aucune remise deuxième chien n'est appliquée pour une réservation simple", () => {
+  assert.equal(getKennelMultiDogPricing(75.5, 1).total, 75.5);
+  assert.equal(getKennelMultiDogPricing(75.5, 1).secondDogDiscount, 0);
 });
 
 test("la signature anti-doublon ne dépend pas de l'ordre des produits", () => {

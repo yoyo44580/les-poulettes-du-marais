@@ -52,6 +52,26 @@ export function validateKennelBookingDogs(dogs, maxDogs = 4) {
   return { valid: true, code: "ok" };
 }
 
+export function getKennelMultiDogPricing(amountPerDog, dogCount, secondDogDiscountPercent = 10) {
+  const unitAmount = Math.max(0, Number(amountPerDog || 0));
+  const count = Math.max(0, Math.floor(Number(dogCount || 0)));
+  const discountPercent = Math.min(100, Math.max(0, Number(secondDogDiscountPercent || 0)));
+  const secondDogDiscount = count >= 2
+    ? Math.round(unitAmount * (discountPercent / 100) * 100) / 100
+    : 0;
+  const perDogAmounts = Array.from({ length: count }, (_, index) => (
+    Math.round((index === 1 ? unitAmount - secondDogDiscount : unitAmount) * 100) / 100
+  ));
+
+  return {
+    unitAmount,
+    dogCount: count,
+    secondDogDiscount,
+    perDogAmounts,
+    total: Math.round(perDogAmounts.reduce((sum, amount) => sum + amount, 0) * 100) / 100,
+  };
+}
+
 export function getKennelBillableDays(startDate, endDate, arrivalTime = "09:00", departureTime = "18:00") {
   const calendarDays = getKennelBookingDays(startDate, endDate);
 

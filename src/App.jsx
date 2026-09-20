@@ -5,6 +5,7 @@ import { ShoppingBasket, Plus, Minus, ClipboardList, LogOut, Leaf, ShieldCheck, 
 import "./App.css";
 import {
   collectPaginatedRows,
+  getKennelMultiDogPricing,
   getKennelBillableDays,
   getKennelBookingDays,
   getKennelCalendarStayDates,
@@ -11292,7 +11293,11 @@ const selectedKennelBillableDays = getKennelBillableDays(
 );
 const selectedKennelEstimatedAmount = selectedKennelBillableDays * Number(kennelDailyService?.price || 0);
 const selectedKennelDogCount = 1 + additionalKennelDogs.length;
-const selectedKennelEstimatedTotalAmount = selectedKennelEstimatedAmount * selectedKennelDogCount;
+const selectedKennelMultiDogPricing = getKennelMultiDogPricing(
+  selectedKennelEstimatedAmount,
+  selectedKennelDogCount,
+);
+const selectedKennelEstimatedTotalAmount = selectedKennelMultiDogPricing.total;
 const selectedAdminKennelBookingDays = getKennelBookingDays(adminKennelBookingForm.startDate, adminKennelBookingForm.endDate);
 const selectedAdminKennelBillableDays = getKennelBillableDays(
   adminKennelBookingForm.startDate,
@@ -16467,6 +16472,11 @@ function openTutorialFromPage(guideId) {
                       Montant estimé : {selectedKennelEstimatedTotalAmount.toFixed(2)} EUR pour {selectedKennelDogCount} chien{selectedKennelDogCount > 1 ? "s" : ""}
                       {kennelDailyService?.price ? ` (${Number(kennelDailyService.price).toFixed(2)} EUR / jour / chien)` : ""}
                     </span>
+                    {selectedKennelDogCount > 1 && (
+                      <span className="kennel-price-preview__discount">
+                        Remise deuxième chien : -{selectedKennelMultiDogPricing.secondDogDiscount.toFixed(2)} EUR (10 %)
+                      </span>
+                    )}
                     <em>
                       Base facturée : {selectedKennelBillableDays.toLocaleString("fr-FR")} jour{selectedKennelBillableDays > 1 ? "s" : ""}.
                       Arrivée après 12h = demi-journée, départ avant 12h = demi-journée.
@@ -17898,7 +17908,10 @@ function openTutorialFromPage(guideId) {
                       <div>
                         <strong>{booking.dog?.name || "Chien"} - {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
                         <span>{booking.phone || "Téléphone non renseigné"}</span>
-                        <em>{booking.status || "Demandée"}</em>
+                        <em>
+                          {booking.status || "Demandée"} - {getKennelBookingAmount(booking).toFixed(2)} EUR
+                          {Number(booking.discount_percent || 0) > 0 ? ` - remise ${Number(booking.discount_percent).toFixed(0)} %` : ""}
+                        </em>
                       </div>
                       {kennelContracts.some((contract) => contract.booking_id === booking.id) ? (
                         <button type="button" className="contract-access-button is-signed" onClick={() => setSelectedContractBooking(booking)}>
@@ -18162,7 +18175,10 @@ function openTutorialFromPage(guideId) {
                       <div>
                         <strong>{booking.dog?.name || "Chien"} - {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}</strong>
                         <span>{booking.phone || "Téléphone non renseigné"}</span>
-                        <em>{booking.status || "Demandée"}</em>
+                        <em>
+                          {booking.status || "Demandée"} - {getKennelBookingAmount(booking).toFixed(2)} EUR
+                          {Number(booking.discount_percent || 0) > 0 ? ` - remise ${Number(booking.discount_percent).toFixed(0)} %` : ""}
+                        </em>
                       </div>
                       {kennelContracts.some((contract) => contract.booking_id === booking.id) ? (
                         <button type="button" className="contract-access-button is-signed" onClick={() => setSelectedContractBooking(booking)}>
@@ -24524,7 +24540,10 @@ function openTutorialFromPage(guideId) {
                                   {formatDeliveryDate(booking.start_date)} au {formatDeliveryDate(booking.end_date)}
                                 </strong>
                                 <span>{renderAdminClientLink(booking, booking.client_name)} - {booking.phone || profile.phonesList[0] || "Téléphone non renseigné"}</span>
-                                <em>{booking.status || "Demandée"}{booking.amount_confirmed ? ` - ${Number(booking.amount_confirmed).toFixed(2)} EUR` : ""}</em>
+                                <em>
+                                  {booking.status || "Demandée"}{booking.amount_confirmed ? ` - ${Number(booking.amount_confirmed).toFixed(2)} EUR` : ""}
+                                  {Number(booking.discount_percent || 0) > 0 ? ` - remise ${Number(booking.discount_percent).toFixed(0)} %` : ""}
+                                </em>
                               </article>
                             ))}
                             {profile.bookings.length === 0 && <p>Aucun séjour enregistré.</p>}
@@ -26440,6 +26459,9 @@ function openTutorialFromPage(guideId) {
                 <p>
                   Total {getKennelBookingAmount(selectedPlanningKennelBooking).toFixed(2)} EUR - acompte {getBookingPaymentSummary(selectedPlanningKennelBooking, getKennelBookingAmount(selectedPlanningKennelBooking)).deposit.toFixed(2)} EUR - reste {getBookingPaymentSummary(selectedPlanningKennelBooking, getKennelBookingAmount(selectedPlanningKennelBooking)).remaining.toFixed(2)} EUR
                 </p>
+                {Number(selectedPlanningKennelBooking.discount_percent || 0) > 0 && (
+                  <p>Remise deuxième chien appliquée : {Number(selectedPlanningKennelBooking.discount_percent).toFixed(0)} %.</p>
+                )}
                 <em>{getBookingPaymentSummary(selectedPlanningKennelBooking, getKennelBookingAmount(selectedPlanningKennelBooking)).method}</em>
               </article>
 
